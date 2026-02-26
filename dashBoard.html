@@ -1,0 +1,1222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TaskVault – Focus.OS</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800;900&family=Share+Tech+Mono&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --gold: #C9A84C;
+  --gold-bright: #FFD166;
+  --gold-dim: #6B5520;
+  --bg: #05040A;
+  --red: #C0392B;
+  --red-bright: #FF4444;
+  --text: #F5EDD8;
+  --text-dim: #7A6F58;
+}
+
+html, body {
+  width: 100%; height: 100%;
+  overflow: hidden;
+  font-family: 'DM Sans', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  cursor: crosshair;
+}
+
+#bg-canvas { position: fixed; inset: 0; z-index: 0; }
+.scanlines {
+  position: fixed; inset: 0; z-index: 1; pointer-events: none;
+  background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.08) 2px, rgba(0,0,0,0.08) 4px);
+}
+.vignette {
+  position: fixed; inset: 0; z-index: 1; pointer-events: none;
+  background: radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.85) 100%);
+}
+.corner { position: fixed; width: 56px; height: 56px; z-index: 50; pointer-events: none; }
+.corner-tl { top: 20px; left: 20px; border-top: 2px solid var(--gold-dim); border-left: 2px solid var(--gold-dim); }
+.corner-tr { top: 20px; right: 20px; border-top: 2px solid var(--gold-dim); border-right: 2px solid var(--gold-dim); }
+.corner-bl { bottom: 20px; left: 20px; border-bottom: 2px solid var(--gold-dim); border-left: 2px solid var(--gold-dim); }
+.corner-br { bottom: 20px; right: 20px; border-bottom: 2px solid var(--gold-dim); border-right: 2px solid var(--gold-dim); }
+
+.hud-badge {
+  position: fixed; top: 36px; right: 36px; z-index: 200;
+  font-family: 'Share Tech Mono', monospace; font-size: 0.55rem;
+  letter-spacing: 2px; color: var(--gold);
+  border: 1px solid var(--gold-dim); padding: 7px 14px;
+  clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px));
+  background: rgba(5,4,10,0.8); backdrop-filter: blur(8px);
+}
+.hud-bottom {
+  position: fixed; bottom: 36px; left: 36px; z-index: 200;
+  font-family: 'Share Tech Mono', monospace; font-size: 0.58rem;
+  color: var(--gold-dim); letter-spacing: 2px; line-height: 1.9;
+}
+.hud-bottom span { color: var(--gold); }
+
+.page { position: fixed; inset: 0; z-index: 10; transition: opacity 0.6s ease, transform 0.6s ease; }
+.page.hidden { opacity: 0; pointer-events: none; }
+#page-hero.hidden { transform: translateX(-60px); }
+#page-screens.hidden { transform: translateX(60px); }
+
+.hero {
+  width: 100%; height: 100%;
+  display: grid; grid-template-columns: 1fr 1fr;
+  align-items: center; padding: 0 6vw; gap: 40px;
+}
+.left { display: flex; flex-direction: column; }
+
+.sys-tag {
+  font-family: 'Share Tech Mono', monospace; font-size: 0.68rem;
+  color: var(--gold); letter-spacing: 3px; margin-bottom: 16px;
+  display: flex; align-items: center; gap: 8px;
+  animation: fadeSlide 0.6s 0.2s ease both;
+}
+.sys-tag::before { content: ''; width: 24px; height: 1px; background: var(--gold); }
+.sys-tag .blink { animation: blink 1s infinite; color: var(--red-bright); }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+
+.hero-title {
+  font-family: 'Syne', sans-serif; font-weight: 900;
+  font-size: clamp(2.8rem, 5.5vw, 5.2rem);
+  line-height: 0.95; letter-spacing: -3px; margin-bottom: 28px;
+  animation: fadeSlide 0.7s 0.35s ease both;
+}
+.hero-title .line1 { display: block; color: var(--text); }
+.hero-title .line2 { display: block; color: var(--gold); position: relative; }
+.hero-title .line2::before, .hero-title .line2::after { content: attr(data-text); position: absolute; top: 0; left: 0; width: 100%; }
+.hero-title .line2::before { color: var(--red-bright); animation: glitch1 4s infinite; clip-path: polygon(0 20%, 100% 20%, 100% 40%, 0 40%); }
+.hero-title .line2::after { color: #00FFFF; animation: glitch2 4s infinite; opacity: 0.4; clip-path: polygon(0 60%, 100% 60%, 100% 80%, 0 80%); }
+@keyframes glitch1 { 0%,95%,100%{transform:translateX(0);opacity:0} 96%{transform:translateX(-3px);opacity:0.8} 97%{transform:translateX(3px);opacity:0.8} 98%{transform:translateX(0);opacity:0} }
+@keyframes glitch2 { 0%,96%,100%{transform:translateX(0);opacity:0} 97%{transform:translateX(4px);opacity:0.5} 98%{transform:translateX(-4px);opacity:0.5} 99%{transform:translateX(0);opacity:0} }
+.hero-title .line3 { display: block; color: var(--text-dim); font-size: 0.55em; letter-spacing: -1px; font-weight: 700; margin-top: 6px; }
+
+.hero-desc { font-size: 0.95rem; color: var(--text-dim); line-height: 1.7; font-weight: 300; max-width: 420px; margin-bottom: 36px; animation: fadeSlide 0.7s 0.5s ease both; }
+.hero-actions { display: flex; gap: 16px; margin-bottom: 48px; animation: fadeSlide 0.7s 0.65s ease both; }
+
+.btn-cyber {
+  display: inline-flex; align-items: center; gap: 10px;
+  background: var(--gold); color: #05040A;
+  font-family: 'Syne', sans-serif; font-weight: 800; font-size: 0.85rem;
+  padding: 14px 28px; letter-spacing: 1px; text-transform: uppercase;
+  text-decoration: none; cursor: pointer; border: none;
+  clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 12px));
+  transition: all 0.2s;
+}
+.btn-cyber:hover { background: var(--gold-bright); transform: translateY(-2px); box-shadow: 0 0 30px rgba(201,168,76,0.5), 0 0 60px rgba(201,168,76,0.2); }
+.btn-cyber svg { width: 16px; height: 16px; flex-shrink: 0; }
+
+.btn-outline {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-family: 'Share Tech Mono', monospace; font-size: 0.78rem;
+  letter-spacing: 2px; text-transform: uppercase; color: var(--gold);
+  text-decoration: none; cursor: pointer; border: 1px solid var(--gold-dim);
+  padding: 14px 24px; background: transparent;
+  clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 10px 100%, 0 calc(100% - 10px));
+  transition: all 0.2s;
+}
+.btn-outline:hover { border-color: var(--gold); background: rgba(201,168,76,0.06); }
+.btn-outline svg { width: 14px; height: 14px; flex-shrink: 0; }
+
+.stats-row { display: flex; gap: 32px; animation: fadeSlide 0.7s 0.8s ease both; }
+.stat { border-left: 2px solid var(--gold-dim); padding-left: 14px; }
+.stat-val { font-family: 'Syne', sans-serif; font-size: 1.4rem; font-weight: 900; color: var(--gold); line-height: 1; }
+.stat-lbl { font-family: 'Share Tech Mono', monospace; font-size: 0.58rem; color: var(--text-dim); letter-spacing: 2px; text-transform: uppercase; margin-top: 4px; }
+
+.phone-stage { display: flex; justify-content: center; align-items: center; height: 100%; perspective: 1200px; animation: fadeIn 1s 0.4s ease both; }
+.phone-3d { position: relative; width: 240px; height: 490px; transform-style: preserve-3d; animation: phoneFloat 6s ease-in-out infinite, phoneRotate 20s ease-in-out infinite; cursor: grab; }
+.phone-3d:active { cursor: grabbing; }
+@keyframes phoneFloat { 0%,100%{transform:rotateY(-18deg) rotateX(4deg) translateY(0)} 50%{transform:rotateY(-18deg) rotateX(4deg) translateY(-16px)} }
+@keyframes phoneRotate { 0%{transform:rotateY(-18deg) rotateX(4deg) translateY(0)} 25%{transform:rotateY(-8deg) rotateX(2deg) translateY(-8px)} 50%{transform:rotateY(-20deg) rotateX(5deg) translateY(-16px)} 75%{transform:rotateY(-14deg) rotateX(3deg) translateY(-6px)} 100%{transform:rotateY(-18deg) rotateX(4deg) translateY(0)} }
+
+.phone-face {
+  position: absolute; inset: 0;
+  background: linear-gradient(160deg, #1C1912 0%, #0D0C08 60%, #1A170F 100%);
+  border-radius: 38px; border: 1.5px solid rgba(201,168,76,0.3);
+  overflow: hidden; transform: translateZ(12px);
+  box-shadow: 0 0 0 1px rgba(201,168,76,0.08), inset 0 1px 0 rgba(255,255,255,0.06), 0 40px 80px rgba(0,0,0,0.8);
+}
+.phone-face::before { content: ''; position: absolute; inset: 0; border-radius: 38px; z-index: 10; pointer-events: none; background: linear-gradient(135deg, rgba(201,168,76,0.06) 0%, transparent 50%, rgba(201,168,76,0.03) 100%); }
+.phone-side-right { position: absolute; top: 10px; right: -24px; width: 24px; height: calc(100% - 20px); background: linear-gradient(to right, #1A170F, #0D0B07); border-radius: 0 12px 12px 0; transform: rotateY(90deg) translateZ(0); transform-origin: left center; border-right: 1px solid rgba(201,168,76,0.1); }
+.phone-side-right::before { content: ''; position: absolute; top: 80px; right: 0; width: 3px; height: 60px; background: rgba(201,168,76,0.3); border-radius: 0 2px 2px 0; }
+.phone-side-right::after { content: ''; position: absolute; top: 160px; right: 0; width: 3px; height: 40px; background: rgba(201,168,76,0.2); border-radius: 0 2px 2px 0; }
+.phone-side-left { position: absolute; top: 10px; left: -24px; width: 24px; height: calc(100% - 20px); background: linear-gradient(to left, #1A170F, #0A0906); border-radius: 12px 0 0 12px; transform: rotateY(-90deg) translateZ(0); transform-origin: right center; }
+.phone-bottom { position: absolute; bottom: -20px; left: 10px; width: calc(100% - 20px); height: 20px; background: linear-gradient(to bottom, #0D0C08, #07060A); border-radius: 0 0 12px 12px; transform: rotateX(-90deg) translateZ(0); transform-origin: top center; }
+.phone-glow { position: absolute; inset: -40px; border-radius: 80px; background: radial-gradient(ellipse, rgba(201,168,76,0.12) 0%, transparent 70%); transform: translateZ(-20px); animation: glowPulse 4s ease-in-out infinite; pointer-events: none; }
+@keyframes glowPulse { 0%,100%{opacity:0.7} 50%{opacity:1} }
+.phone-shadow { position: absolute; bottom: -80px; left: 50%; transform: translateX(-50%) rotateX(90deg); width: 180px; height: 40px; background: radial-gradient(ellipse, rgba(201,168,76,0.2) 0%, transparent 70%); border-radius: 50%; animation: shadowPulse 6s ease-in-out infinite; pointer-events: none; }
+@keyframes shadowPulse { 0%,100%{transform:translateX(-50%) rotateX(90deg) scale(1);opacity:0.6} 50%{transform:translateX(-50%) rotateX(90deg) scale(0.85);opacity:0.3} }
+
+.screen { position: relative; width: 100%; height: 100%; overflow: hidden; border-radius: 37px; }
+.dynamic-island { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); width: 90px; height: 28px; background: #000; border-radius: 20px; z-index: 20; display: flex; align-items: center; justify-content: center; gap: 6px; }
+.island-dot { width: 8px; height: 8px; border-radius: 50%; background: #1A1A1A; }
+.island-dot.cam { width: 10px; height: 10px; background: radial-gradient(circle at 35% 35%, #333, #111); border: 1px solid #222; }
+.screen-content { position: absolute; inset: 0; background: linear-gradient(180deg, #0E0C07 0%, #0A0806 100%); padding: 52px 16px 20px; display: flex; flex-direction: column; gap: 10px; }
+.s-title { font-family: 'Syne', sans-serif; font-size: 1rem; font-weight: 800; color: #F5EDD8; letter-spacing: -0.5px; }
+.s-timer { font-family: 'Syne', sans-serif; font-size: 2.4rem; font-weight: 900; color: #C9A84C; letter-spacing: -2px; line-height: 1; text-shadow: 0 0 20px rgba(201,168,76,0.4); animation: timerPulse 2s ease-in-out infinite; }
+@keyframes timerPulse { 0%,100%{text-shadow:0 0 20px rgba(201,168,76,0.4)} 50%{text-shadow:0 0 35px rgba(201,168,76,0.7),0 0 60px rgba(201,168,76,0.2)} }
+.s-card { background: rgba(201,168,76,0.06); border: 1px solid rgba(201,168,76,0.15); border-radius: 12px; padding: 10px 14px; }
+.s-label { font-family: 'Share Tech Mono', monospace; font-size: 0.5rem; color: #6B5520; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 4px; }
+.s-val { font-size: 0.75rem; color: #F5EDD8; font-weight: 500; display: flex; align-items: center; gap: 5px; }
+.s-val svg { width: 11px; height: 11px; }
+.s-btn { background: #C9A84C; border-radius: 10px; padding: 11px; text-align: center; font-family: 'Syne', sans-serif; font-weight: 800; font-size: 0.72rem; color: #05040A; animation: btnGlow 3s ease-in-out infinite; }
+@keyframes btnGlow { 0%,100%{box-shadow:0 0 10px rgba(201,168,76,0.3)} 50%{box-shadow:0 0 25px rgba(201,168,76,0.6),0 0 50px rgba(201,168,76,0.2)} }
+.s-monitor { background: rgba(255,255,255,0.02); border: 1px solid rgba(201,168,76,0.08); border-radius: 10px; padding: 8px 12px; display: flex; justify-content: space-between; align-items: center; }
+.s-warn { color: #E74C3C; font-size: 0.62rem; font-weight: 600; display: flex; align-items: center; gap: 4px; }
+.s-warn svg { width: 10px; height: 10px; }
+.s-faces { color: #6B5520; font-size: 0.58rem; font-family: 'Share Tech Mono', monospace; }
+.s-status { background: rgba(76,175,80,0.1); border: 1px solid rgba(76,175,80,0.2); border-radius: 8px; padding: 8px 12px; }
+.s-status .ok { color: #4CAF50; font-weight: 600; font-size: 0.62rem; display: flex; align-items: center; gap: 4px; }
+.s-status .ok svg { width: 9px; height: 9px; }
+.s-status .sub { color: #6B5520; font-size: 0.58rem; margin-top: 2px; }
+.screen::after { content: ''; position: absolute; left: 0; right: 0; height: 2px; background: linear-gradient(90deg, transparent, rgba(201,168,76,0.4), transparent); animation: scanLine 4s linear infinite; z-index: 30; pointer-events: none; }
+@keyframes scanLine { 0%{top:0%;opacity:1} 95%{opacity:1} 100%{top:100%;opacity:0} }
+
+.drag-hint { position: absolute; bottom: -60px; left: 50%; transform: translateX(-50%); font-family: 'Share Tech Mono', monospace; font-size: 0.55rem; letter-spacing: 2px; color: var(--gold-dim); white-space: nowrap; animation: hintPulse 2s ease-in-out infinite; }
+@keyframes hintPulse { 0%,100%{opacity:0.4} 50%{opacity:0.8} }
+
+.data-chip { position: absolute; font-family: 'Share Tech Mono', monospace; font-size: 0.6rem; letter-spacing: 1px; padding: 6px 12px; border-radius: 4px; pointer-events: none; white-space: nowrap; animation: chipFloat 8s ease-in-out infinite; display: flex; align-items: center; gap: 6px; }
+.data-chip svg { width: 10px; height: 10px; flex-shrink: 0; }
+.chip-1 { top: 15%; right: 5%; background: rgba(201,168,76,0.08); border: 1px solid rgba(201,168,76,0.25); color: var(--gold); }
+.chip-2 { bottom: 28%; right: 2%; background: rgba(192,57,43,0.08); border: 1px solid rgba(192,57,43,0.25); color: var(--red-bright); animation-delay: 2s; }
+.chip-3 { bottom: 18%; left: 52%; background: rgba(201,168,76,0.05); border: 1px solid rgba(201,168,76,0.15); color: var(--text-dim); animation-delay: 4s; }
+@keyframes chipFloat { 0%,100%{transform:translateY(0);opacity:0.8} 50%{transform:translateY(-8px);opacity:1} }
+
+#page-screens { overflow: hidden; }
+.screens-page { width: 100%; height: 100%; display: flex; flex-direction: column; padding: 0 6vw; overflow: hidden; }
+
+.sp-nav { display: flex; align-items: center; justify-content: space-between; padding: 28px 0 20px; flex-shrink: 0; border-bottom: 1px solid rgba(201,168,76,0.1); }
+.sp-nav-left { display: flex; align-items: center; gap: 20px; }
+.back-btn { display: inline-flex; align-items: center; gap: 8px; font-family: 'Share Tech Mono', monospace; font-size: 0.72rem; letter-spacing: 2px; color: var(--gold); cursor: pointer; border: 1px solid var(--gold-dim); padding: 8px 16px; clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px)); transition: all 0.2s; background: transparent; }
+.back-btn:hover { border-color: var(--gold); background: rgba(201,168,76,0.06); }
+.back-btn svg { width: 12px; height: 12px; }
+.sp-title-bar { font-family: 'Syne', sans-serif; font-weight: 900; font-size: 1.1rem; letter-spacing: -0.5px; color: var(--gold); }
+.sp-tag { font-family: 'Share Tech Mono', monospace; font-size: 0.55rem; letter-spacing: 3px; color: var(--text-dim); }
+
+.tab-bar { display: flex; gap: 4px; padding: 16px 0 0; flex-shrink: 0; }
+.tab { font-family: 'Share Tech Mono', monospace; font-size: 0.65rem; letter-spacing: 2px; text-transform: uppercase; cursor: pointer; padding: 8px 18px; color: var(--text-dim); border: 1px solid transparent; clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px)); transition: all 0.2s; background: transparent; }
+.tab.active { color: var(--gold); border-color: var(--gold-dim); background: rgba(201,168,76,0.06); }
+.tab:hover:not(.active) { color: var(--text); }
+
+.sp-content { flex: 1; overflow: hidden; padding: 20px 0 10px; position: relative; }
+.tab-panel { display: none !important; height: 100%; }
+.tab-panel.active { display: flex !important; }
+
+#tab-shots { gap: 20px; align-items: stretch; }
+
+.shots-sidebar { width: 220px; flex-shrink: 0; display: flex; flex-direction: column; gap: 8px; overflow-y: auto; padding-right: 8px; }
+.shots-sidebar::-webkit-scrollbar { width: 2px; }
+.shots-sidebar::-webkit-scrollbar-thumb { background: var(--gold-dim); border-radius: 2px; }
+
+.shot-thumb { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border: 1px solid rgba(201,168,76,0.1); border-radius: 8px; cursor: pointer; transition: all 0.2s; background: rgba(255,255,255,0.02); clip-path: polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 6px 100%, 0 calc(100% - 6px)); }
+.shot-thumb:hover { border-color: rgba(201,168,76,0.3); background: rgba(201,168,76,0.04); }
+.shot-thumb.active { border-color: var(--gold); background: rgba(201,168,76,0.08); }
+.shot-thumb-num { font-family: 'Share Tech Mono', monospace; font-size: 0.6rem; color: var(--gold-dim); width: 20px; flex-shrink: 0; }
+.shot-thumb.active .shot-thumb-num { color: var(--gold); }
+.shot-thumb-name { font-size: 0.75rem; font-weight: 500; color: var(--text-dim); line-height: 1.2; }
+.shot-thumb.active .shot-thumb-name { color: var(--text); }
+.shot-thumb-tag { font-family: 'Share Tech Mono', monospace; font-size: 0.5rem; letter-spacing: 1px; color: var(--gold-dim); margin-top: 2px; }
+
+.shots-preview { flex: 1; display: flex; align-items: center; justify-content: center; position: relative; perspective: 1000px; }
+.preview-phone-wrap { position: relative; transition: transform 0.5s ease; }
+.preview-phone { width: 200px; position: relative; transform-style: preserve-3d; animation: previewFloat 5s ease-in-out infinite; }
+@keyframes previewFloat { 0%,100%{transform:rotateY(-8deg) rotateX(3deg) translateY(0)} 50%{transform:rotateY(-8deg) rotateX(3deg) translateY(-10px)} }
+.preview-frame { background: linear-gradient(160deg, #1C1912, #0D0C08); border-radius: 36px; border: 1.5px solid rgba(201,168,76,0.4); overflow: hidden; position: relative; box-shadow: 0 0 0 1px rgba(201,168,76,0.1), 0 30px 80px rgba(0,0,0,0.8), 0 0 60px rgba(201,168,76,0.08); }
+.preview-frame::after { content: ''; position: absolute; inset: 0; border-radius: 35px; pointer-events: none; background: linear-gradient(135deg, rgba(201,168,76,0.08) 0%, transparent 50%); }
+.preview-phone::before { content: ''; position: absolute; inset: -30px; z-index: -1; border-radius: 60px; background: radial-gradient(ellipse, rgba(201,168,76,0.1) 0%, transparent 70%); animation: glowPulse 4s ease-in-out infinite; }
+
+.shot-info-panel { width: 260px; flex-shrink: 0; display: flex; flex-direction: column; gap: 16px; padding-left: 28px; border-left: 1px solid rgba(201,168,76,0.1); }
+.sip-tag { font-family: 'Share Tech Mono', monospace; font-size: 0.55rem; letter-spacing: 3px; color: var(--gold); text-transform: uppercase; }
+.sip-name { font-family: 'Syne', sans-serif; font-weight: 900; font-size: 1.6rem; letter-spacing: -1px; color: var(--text); line-height: 1.1; }
+.sip-desc { font-size: 0.85rem; color: var(--text-dim); line-height: 1.7; font-weight: 300; }
+.sip-features { display: flex; flex-direction: column; gap: 8px; }
+.sip-feature { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; background: rgba(201,168,76,0.04); border: 1px solid rgba(201,168,76,0.1); border-radius: 8px; clip-path: polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 6px 100%, 0 calc(100% - 6px)); }
+.sip-feature-icon { font-size: 0.9rem; flex-shrink: 0; margin-top: 1px; display: flex; align-items: center; }
+.sip-feature-icon svg { width: 14px; height: 14px; color: var(--gold); }
+.sip-feature-text { font-size: 0.78rem; color: var(--text-dim); line-height: 1.5; }
+.sip-feature-text strong { color: var(--text); font-weight: 500; }
+.sip-counter { font-family: 'Share Tech Mono', monospace; font-size: 0.6rem; color: var(--gold-dim); letter-spacing: 2px; margin-top: auto; padding-top: 8px; border-top: 1px solid rgba(201,168,76,0.1); }
+.sip-counter span { color: var(--gold); }
+
+.preview-nav { position: absolute; bottom: 0; left: 50%; transform: translateX(-50%); display: flex; gap: 8px; align-items: center; }
+.pnav-btn { font-family: 'Share Tech Mono', monospace; font-size: 0.65rem; letter-spacing: 1px; color: var(--gold-dim); cursor: pointer; padding: 6px 14px; border: 1px solid rgba(201,168,76,0.15); background: transparent; clip-path: polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 6px 100%, 0 calc(100% - 6px)); transition: all 0.2s; }
+.pnav-btn:hover { color: var(--gold); border-color: var(--gold); }
+.pnav-dots { display: flex; gap: 6px; }
+.pnav-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--gold-dim); transition: all 0.2s; }
+.pnav-dot.active { background: var(--gold); box-shadow: 0 0 8px rgba(201,168,76,0.6); }
+
+#tab-features { grid-template-columns: repeat(3, 1fr); gap: 14px; align-content: start; overflow-y: auto; padding-bottom: 10px; }
+#tab-features.active { display: grid !important; }
+#tab-features::-webkit-scrollbar { width: 2px; }
+#tab-features::-webkit-scrollbar-thumb { background: var(--gold-dim); border-radius: 2px; }
+
+.feat-card { background: rgba(255,255,255,0.02); border: 1px solid rgba(201,168,76,0.12); border-radius: 12px; padding: 20px; transition: all 0.3s; clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 10px 100%, 0 calc(100% - 10px)); position: relative; overflow: hidden; }
+.feat-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px; background: linear-gradient(90deg, transparent, var(--gold), transparent); opacity: 0; transition: opacity 0.3s; }
+.feat-card:hover { border-color: rgba(201,168,76,0.3); background: rgba(201,168,76,0.03); transform: translateY(-3px); }
+.feat-card:hover::before { opacity: 1; }
+.feat-icon { margin-bottom: 12px; color: var(--gold); }
+.feat-icon svg { width: 22px; height: 22px; }
+.feat-title { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 0.9rem; margin-bottom: 8px; letter-spacing: -0.3px; color: var(--text); }
+.feat-desc { font-size: 0.78rem; color: var(--text-dim); line-height: 1.6; font-weight: 300; }
+.feat-tag { display: inline-block; margin-top: 10px; font-family: 'Share Tech Mono', monospace; font-size: 0.5rem; letter-spacing: 2px; color: var(--gold); background: rgba(201,168,76,0.08); padding: 3px 8px; border-radius: 2px; }
+
+/* ── ABOUT TAB ── */
+#tab-about { flex-direction: column; overflow-y: auto; overflow-x: hidden; }
+#tab-about.active { display: flex !important; }
+#tab-about::-webkit-scrollbar { width: 2px; }
+#tab-about::-webkit-scrollbar-thumb { background: var(--gold-dim); border-radius: 2px; }
+
+.about-hero-row {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 28px;
+  padding-bottom: 24px; border-bottom: 1px solid rgba(201,168,76,0.1); margin-bottom: 24px;
+  flex-shrink: 0;
+}
+.about-left { display: flex; flex-direction: column; gap: 14px; }
+.about-headline { font-family: 'Syne', sans-serif; font-weight: 900; font-size: clamp(1.6rem, 2.8vw, 2.4rem); letter-spacing: -1.5px; line-height: 1.05; color: var(--text); }
+.about-headline .acc { color: var(--gold); }
+.about-body { font-size: 0.85rem; color: var(--text-dim); line-height: 1.8; font-weight: 300; }
+.about-body p + p { margin-top: 8px; }
+.about-specs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.spec-item { padding: 10px 12px; background: rgba(201,168,76,0.04); border: 1px solid rgba(201,168,76,0.12); border-radius: 8px; clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px)); }
+.spec-key { font-family: 'Share Tech Mono', monospace; font-size: 0.48rem; letter-spacing: 2px; color: var(--gold-dim); text-transform: uppercase; margin-bottom: 3px; }
+.spec-val { font-size: 0.78rem; color: var(--text); font-weight: 500; }
+.about-cta { display: flex; gap: 12px; }
+
+.about-right { display: flex; flex-direction: column; gap: 10px; }
+.timeline-item { display: flex; gap: 12px; padding: 12px 14px; background: rgba(255,255,255,0.02); border: 1px solid rgba(201,168,76,0.1); border-radius: 10px; clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px)); }
+.tl-icon { flex-shrink: 0; color: var(--gold); margin-top: 2px; }
+.tl-icon svg { width: 16px; height: 16px; }
+.tl-title { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 0.82rem; margin-bottom: 3px; }
+.tl-desc { font-size: 0.72rem; color: var(--text-dim); line-height: 1.5; font-weight: 300; }
+
+/* Tech Stack Section */
+.tech-section { flex-shrink: 0; }
+.tech-section-title {
+  font-family: 'Share Tech Mono', monospace; font-size: 0.55rem; letter-spacing: 3px;
+  color: var(--gold); text-transform: uppercase; margin-bottom: 14px;
+  display: flex; align-items: center; gap: 10px;
+}
+.tech-section-title::after { content: ''; flex: 1; height: 1px; background: rgba(201,168,76,0.15); }
+.tech-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 10px; }
+.tech-card {
+  background: rgba(255,255,255,0.02); border: 1px solid rgba(201,168,76,0.1);
+  border-radius: 10px; padding: 14px 12px;
+  clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px));
+  transition: all 0.25s; position: relative; overflow: hidden;
+}
+.tech-card::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px;
+  background: linear-gradient(90deg, transparent, var(--gold), transparent); opacity: 0; transition: opacity 0.25s;
+}
+.tech-card:hover { border-color: rgba(201,168,76,0.3); background: rgba(201,168,76,0.04); transform: translateY(-2px); }
+.tech-card:hover::before { opacity: 1; }
+.tech-card-icon { color: var(--gold); margin-bottom: 10px; }
+.tech-card-icon svg { width: 20px; height: 20px; }
+.tech-card-name { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 0.8rem; color: var(--text); margin-bottom: 4px; }
+.tech-card-role { font-size: 0.7rem; color: var(--text-dim); line-height: 1.5; font-weight: 300; }
+.tech-card-tag { display: inline-block; margin-top: 8px; font-family: 'Share Tech Mono', monospace; font-size: 0.45rem; letter-spacing: 2px; color: var(--gold); background: rgba(201,168,76,0.08); padding: 2px 7px; border-radius: 2px; }
+
+@keyframes fadeSlide { from{opacity:0;transform:translateY(20px)} to{opacity:1;transform:translateY(0)} }
+@keyframes fadeIn { from{opacity:0} to{opacity:1} }
+#page-screens:not(.hidden) .sp-nav { animation: fadeSlide 0.5s 0.1s ease both; }
+#page-screens:not(.hidden) .tab-bar { animation: fadeSlide 0.5s 0.2s ease both; }
+#page-screens:not(.hidden) .sp-content { animation: fadeSlide 0.5s 0.3s ease both; }
+
+/* ── Inline SVG helper colours inside screen mockups ── */
+.ic { display:inline-flex; align-items:center; vertical-align:middle; }
+
+/* ══════════════════════════════════
+   RESPONSIVE — TABLET ≤900px
+══════════════════════════════════ */
+@media (max-width: 900px) {
+  html, body { overflow-y: auto; overflow-x: hidden; cursor: auto; }
+
+  /* pages become block, not fixed */
+  .page { position: relative; height: auto; min-height: 100vh; transition: none; }
+  .page.hidden { display: none !important; opacity: 1; pointer-events: auto; transform: none; }
+  #page-hero.hidden, #page-screens.hidden { transform: none; }
+  #page-screens { overflow: visible; }
+
+  /* HUD */
+  .hud-bottom { display: none; }
+  .hud-badge { top: 12px; right: 12px; font-size: 0.45rem; padding: 5px 10px; }
+  .corner { width: 28px; height: 28px; }
+  .corner-tl { top: 10px; left: 10px; }
+  .corner-tr { top: 10px; right: 10px; }
+  .corner-bl { bottom: 10px; left: 10px; }
+  .corner-br { bottom: 10px; right: 10px; }
+
+  /* hero */
+  .hero { grid-template-columns: 1fr; padding: 80px 6vw 60px; gap: 50px; height: auto; align-items: flex-start; }
+  .hero-title { font-size: clamp(2.4rem, 8vw, 4rem); letter-spacing: -2px; }
+  .phone-stage { height: 420px; }
+  .data-chip { display: none; }
+  .drag-hint { display: none; }
+
+  /* screens page layout */
+  .screens-page { padding: 0 4vw; }
+  .sp-content { overflow: visible; height: auto; }
+  .tab-panel { height: auto; }
+  .tab-panel.active { display: flex !important; }
+
+  /* screenshots: sidebar becomes horizontal scroll row */
+  #tab-shots { flex-direction: column; gap: 16px; height: auto; align-items: stretch; }
+  .shots-sidebar { width: 100%; flex-direction: row; flex-wrap: nowrap; overflow-x: auto; overflow-y: visible; padding-right: 0; padding-bottom: 4px; gap: 6px; }
+  .shots-sidebar::-webkit-scrollbar { height: 2px; width: 0; }
+  .shot-thumb { flex: 0 0 140px; }
+  .shots-preview { height: 460px; }
+  .shot-info-panel { width: 100%; padding-left: 0; border-left: none; border-top: 1px solid rgba(201,168,76,0.1); padding-top: 16px; gap: 12px; }
+
+  /* features: 2 col */
+  #tab-features { grid-template-columns: repeat(2, 1fr) !important; }
+
+  /* about */
+  .about-hero-row { grid-template-columns: 1fr; gap: 20px; }
+  .tech-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* ══════════════════════════════════
+   RESPONSIVE — MOBILE ≤600px
+══════════════════════════════════ */
+@media (max-width: 600px) {
+  html, body { overflow-y: auto; overflow-x: hidden; cursor: auto; }
+
+  .hud-badge { display: none; }
+  .corner { display: none; }
+
+  /* pages become block */
+  .page { position: relative; height: auto; min-height: 100dvh; transition: none; }
+  .page.hidden { display: none !important; opacity: 1; pointer-events: auto; transform: none; }
+  #page-hero.hidden, #page-screens.hidden { transform: none; }
+  #page-screens { overflow: visible; }
+
+  /* hero */
+  .hero { grid-template-columns: 1fr; padding: 60px 5vw 40px; gap: 36px; height: auto; }
+  .hero-title { font-size: clamp(2rem, 10vw, 3rem); letter-spacing: -1.5px; margin-bottom: 16px; }
+  .hero-desc { font-size: 0.85rem; margin-bottom: 22px; max-width: 100%; }
+  .hero-actions { flex-direction: column; gap: 10px; margin-bottom: 28px; }
+  .btn-cyber { width: 100%; justify-content: center; padding: 13px 20px; font-size: 0.78rem; }
+  .btn-outline { width: 100%; justify-content: center; padding: 12px 20px; font-size: 0.7rem; }
+  .stats-row { gap: 14px; }
+  .stat-val { font-size: 1.1rem; }
+  .stat-lbl { font-size: 0.5rem; }
+  .phone-stage { height: 340px; }
+  .phone-3d { width: 180px; height: 368px; }
+  .data-chip { display: none; }
+  .drag-hint { display: none; }
+
+  /* screens page */
+  .screens-page { padding: 0 4vw; }
+  .sp-nav { padding: 14px 0 12px; flex-wrap: wrap; gap: 8px; }
+  .sp-nav-left { gap: 10px; }
+  .back-btn { font-size: 0.6rem; padding: 6px 12px; }
+  .sp-title-bar { font-size: 0.9rem; }
+  .sp-tag { display: none; }
+
+  .tab-bar { gap: 3px; padding: 10px 0 0; }
+  .tab { font-size: 0.57rem; padding: 6px 10px; letter-spacing: 1px; }
+
+  .sp-content { padding: 12px 0 20px; overflow: visible; height: auto; }
+  .tab-panel { height: auto; }
+  .tab-panel.active { display: flex !important; }
+
+  /* screenshots */
+  #tab-shots { flex-direction: column; gap: 12px; height: auto; }
+  .shots-sidebar { width: 100%; flex-direction: row; flex-wrap: nowrap; overflow-x: auto; overflow-y: visible; padding-right: 0; padding-bottom: 4px; gap: 6px; }
+  .shots-sidebar::-webkit-scrollbar { height: 2px; width: 0; }
+  .shot-thumb { flex: 0 0 120px; }
+  .shot-thumb-tag { display: none; }
+  .shots-preview { height: 400px; }
+  .preview-phone { width: 160px; }
+  .shot-info-panel { width: 100%; padding-left: 0; border-left: none; border-top: 1px solid rgba(201,168,76,0.1); padding-top: 14px; gap: 10px; }
+  .sip-name { font-size: 1.2rem; }
+  .sip-features { gap: 6px; }
+  .sip-feature-text { font-size: 0.73rem; }
+  .preview-nav { position: static; transform: none; justify-content: center; margin-top: 10px; }
+  .pnav-btn { font-size: 0.57rem; padding: 5px 10px; }
+
+  /* features: 1 col */
+  #tab-features { grid-template-columns: 1fr !important; gap: 8px; }
+  .feat-card { padding: 14px; }
+  .feat-icon svg { width: 18px; height: 18px; }
+
+  /* about */
+  .about-hero-row { grid-template-columns: 1fr; gap: 16px; margin-bottom: 16px; padding-bottom: 16px; }
+  .about-headline { font-size: clamp(1.4rem, 7vw, 2rem); }
+  .about-body { font-size: 0.82rem; }
+  .about-specs { grid-template-columns: repeat(2, 1fr); gap: 7px; }
+  .spec-val { font-size: 0.72rem; }
+  .about-cta { flex-direction: column; gap: 8px; }
+  .about-cta .btn-cyber, .about-cta .btn-outline { width: 100%; justify-content: center; }
+  .tech-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  .tech-card { padding: 11px 10px; }
+  .tech-card-name { font-size: 0.72rem; }
+  .tech-card-role { font-size: 0.62rem; }
+  .tech-card-icon svg { width: 16px; height: 16px; }
+  .timeline-item { padding: 10px 12px; gap: 10px; }
+  .tl-icon svg { width: 14px; height: 14px; }
+  .tl-title { font-size: 0.78rem; }
+  .tl-desc { font-size: 0.68rem; }
+}
+</style>
+</head>
+<body>
+
+<!-- SVG SPRITE — all icons defined once, reused with <use> -->
+<svg xmlns="http://www.w3.org/2000/svg" style="display:none">
+  <!-- eye -->
+  <symbol id="ic-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+  </symbol>
+  <!-- clock / timer -->
+  <symbol id="ic-clock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+  </symbol>
+  <!-- alert triangle -->
+  <symbol id="ic-warn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+  </symbol>
+  <!-- users -->
+  <symbol id="ic-users" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+  </symbol>
+  <!-- message square -->
+  <symbol id="ic-msg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+  </symbol>
+  <!-- file text -->
+  <symbol id="ic-file" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>
+  </symbol>
+  <!-- bell -->
+  <symbol id="ic-bell" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+  </symbol>
+  <!-- image -->
+  <symbol id="ic-image" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
+  </symbol>
+  <!-- lock -->
+  <symbol id="ic-lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+  </symbol>
+  <!-- target -->
+  <symbol id="ic-target" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>
+  </symbol>
+  <!-- save -->
+  <symbol id="ic-save" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/>
+  </symbol>
+  <!-- bar chart -->
+  <symbol id="ic-chart" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>
+  </symbol>
+  <!-- handshake (link) -->
+  <symbol id="ic-link" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+  </symbol>
+  <!-- book -->
+  <symbol id="ic-book" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+  </symbol>
+  <!-- download -->
+  <symbol id="ic-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+  </symbol>
+  <!-- arrow left -->
+  <symbol id="ic-arrow-left" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/>
+  </symbol>
+  <!-- arrow right -->
+  <symbol id="ic-arrow-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/>
+  </symbol>
+  <!-- grid / screens -->
+  <symbol id="ic-grid" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
+  </symbol>
+  <!-- user -->
+  <symbol id="ic-user" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+  </symbol>
+  <!-- camera -->
+  <symbol id="ic-camera" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/>
+  </symbol>
+  <!-- stop square -->
+  <symbol id="ic-stop" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+  </symbol>
+  <!-- check circle -->
+  <symbol id="ic-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>
+  </symbol>
+  <!-- search -->
+  <symbol id="ic-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+  </symbol>
+  <!-- edit -->
+  <symbol id="ic-edit" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+  </symbol>
+  <!-- log-out -->
+  <symbol id="ic-logout" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
+  </symbol>
+  <!-- inbox -->
+  <symbol id="ic-inbox" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 17.08 4H6.92a2 2 0 0 0-1.47.65z"/>
+  </symbol>
+  <!-- send -->
+  <symbol id="ic-send" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+  </symbol>
+  <!-- paperclip -->
+  <symbol id="ic-clip" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
+  </symbol>
+  <!-- smile -->
+  <symbol id="ic-smile" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="12" r="10"/><path d="M8 13s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/>
+  </symbol>
+  <!-- settings / gear -->
+  <symbol id="ic-gear" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+  </symbol>
+  <!-- monitor -->
+  <symbol id="ic-monitor" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>
+  </symbol>
+  <!-- cpu / ai -->
+  <symbol id="ic-cpu" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="9" y="9" width="6" height="6"/><rect x="2" y="2" width="20" height="20" rx="2"/><line x1="9" y1="2" x2="9" y2="9"/><line x1="15" y1="2" x2="15" y2="9"/><line x1="9" y1="15" x2="9" y2="22"/><line x1="15" y1="15" x2="15" y2="22"/><line x1="2" y1="9" x2="9" y2="9"/><line x1="2" y1="15" x2="9" y2="15"/><line x1="15" y1="9" x2="22" y2="9"/><line x1="15" y1="15" x2="22" y2="15"/>
+  </symbol>
+  <!-- plus -->
+  <symbol id="ic-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+  </symbol>
+  <!-- x / close -->
+  <symbol id="ic-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+  </symbol>
+  <!-- chevron right -->
+  <symbol id="ic-chevron-r" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <polyline points="9 18 15 12 9 6"/>
+  </symbol>
+  <!-- upload -->
+  <symbol id="ic-upload" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/>
+  </symbol>
+  <!-- folder -->
+  <symbol id="ic-folder" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+  </symbol>
+  <!-- key -->
+  <symbol id="ic-key" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/>
+  </symbol>
+  <!-- refresh / rotate -->
+  <symbol id="ic-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+  </symbol>
+  <!-- circle dot (radio) -->
+  <symbol id="ic-dot" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3" fill="currentColor"/>
+  </symbol>
+</svg>
+
+<canvas id="bg-canvas"></canvas>
+<div class="scanlines"></div>
+<div class="vignette"></div>
+<div class="corner corner-tl"></div>
+<div class="corner corner-tr"></div>
+<div class="corner corner-bl"></div>
+<div class="corner corner-br"></div>
+<div class="hud-badge" id="hud-badge">SYS::TASKVAULT_v1.0.0 ▮</div>
+<div class="hud-bottom">
+  SYS_FOCUS_MODE <span>ACTIVE</span><br>
+  FACE_TRACK <span>ENABLED</span><br>
+  SESSION <span>READY</span>
+</div>
+
+<!-- ══════════ PAGE 1: HERO ══════════ -->
+<div class="page" id="page-hero">
+  <section class="hero">
+    <div class="left">
+      <div class="sys-tag">TASKVAULT <span class="blink">▮</span> FOCUS.OS</div>
+      <h1 class="hero-title">
+        <span class="line1">Stay</span>
+        <span class="line2" data-text="FOCUSED.">FOCUSED.</span>
+        <span class="line3">Real-time accountability for modern minds</span>
+      </h1>
+      <p class="hero-desc">
+        AI face-tracking monitors every session. Warning logs. Social leaderboards. PDF vault. One app to rule your focus — built for those who refuse to drift.
+      </p>
+      <div class="hero-actions">
+        <button class="btn-cyber" onclick="goToScreens()">
+          <svg width="16" height="16"><use href="#ic-grid"/></svg>
+          View Screens
+        </button>
+        <a href="Assets/Apk/TaskVault-v1.0.apk" class="btn-outline" download="TaskVault-v1.0.apk"
+           onclick="alert('After download, enable Install from Unknown Sources to install the app.')">
+          <svg width="14" height="14"><use href="#ic-download"/></svg>
+          Download APK
+        </a>
+      </div>
+      <div class="stats-row">
+        <div class="stat"><div class="stat-val">60+</div><div class="stat-lbl">Min Sessions</div></div>
+        <div class="stat"><div class="stat-val">Live</div><div class="stat-lbl">Face Tracking</div></div>
+        <div class="stat"><div class="stat-val">v1.0</div><div class="stat-lbl">Android</div></div>
+      </div>
+    </div>
+
+    <div class="phone-stage">
+      <div class="phone-3d" id="phone3d">
+        <div class="phone-glow"></div>
+        <div class="phone-side-right"></div>
+        <div class="phone-side-left"></div>
+        <div class="phone-bottom"></div>
+        <div class="phone-face">
+          <div class="screen">
+            <div class="dynamic-island"><div class="island-dot cam"></div><div class="island-dot"></div></div>
+            <div class="screen-content">
+              <div class="s-title">Focus Session</div>
+              <div class="s-timer" id="timer">00:00</div>
+              <div class="s-card">
+                <div class="s-label">Duration (min)</div>
+                <div class="s-val"><svg width="11" height="11"><use href="#ic-clock"/></svg> 60 min</div>
+              </div>
+              <div class="s-btn">Start Focus Session</div>
+              <div class="s-monitor">
+                <span class="s-warn"><svg width="10" height="10"><use href="#ic-warn"/></svg> Warnings: 0</span>
+                <span class="s-faces">Faces: 0 | Frames: 0</span>
+              </div>
+              <div class="s-status">
+                <div class="ok"><svg width="9" height="9"><use href="#ic-dot"/></svg> Ready to start session</div>
+                <div class="sub">Real-time face tracking will begin</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="phone-shadow"></div>
+        <div class="drag-hint">⟵ drag to rotate ⟶</div>
+      </div>
+      <div class="data-chip chip-1">
+        <svg width="10" height="10"><use href="#ic-eye"/></svg>FACE_TRACK::ON
+      </div>
+      <div class="data-chip chip-2">
+        <svg width="10" height="10"><use href="#ic-warn"/></svg>WARN::04
+      </div>
+      <div class="data-chip chip-3">
+        <svg width="10" height="10"><use href="#ic-check"/></svg>SESSION::COMPLETE
+      </div>
+    </div>
+  </section>
+</div>
+
+<!-- ══════════ PAGE 2: SCREENS ══════════ -->
+<div class="page hidden" id="page-screens">
+  <div class="screens-page">
+    <div class="sp-nav">
+      <div class="sp-nav-left">
+        <button class="back-btn" onclick="goToHero()">
+          <svg width="12" height="12"><use href="#ic-arrow-left"/></svg> BACK
+        </button>
+        <div>
+          <div class="sp-title-bar">TASKVAULT</div>
+          <div class="sp-tag">APP OVERVIEW // SCREENS &amp; FEATURES</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="tab-bar">
+      <button class="tab active" onclick="switchTab('shots', this)">Screenshots</button>
+      <button class="tab" onclick="switchTab('features', this)">Features</button>
+      <button class="tab" onclick="switchTab('about', this)">About</button>
+    </div>
+
+    <div class="sp-content">
+
+      <!-- SCREENSHOTS TAB -->
+      <div class="tab-panel active" id="tab-shots">
+        <div class="shots-sidebar" id="shots-sidebar"></div>
+        <div class="shots-preview">
+          <div class="preview-phone-wrap">
+            <div class="preview-phone">
+              <div class="preview-frame">
+                <div id="preview-screen" style="width:200px;min-height:430px;background:#0A0806;border-radius:35px;overflow:hidden;position:relative;"></div>
+              </div>
+            </div>
+          </div>
+          <div class="preview-nav">
+            <button class="pnav-btn" onclick="prevShot()">◀ PREV</button>
+            <div class="pnav-dots" id="pnav-dots"></div>
+            <button class="pnav-btn" onclick="nextShot()">NEXT ▶</button>
+          </div>
+        </div>
+        <div class="shot-info-panel" id="shot-info-panel"></div>
+      </div>
+
+      <!-- FEATURES TAB -->
+      <div class="tab-panel" id="tab-features">
+        <div class="feat-card">
+          <div class="feat-icon"><svg><use href="#ic-eye"/></svg></div>
+          <div class="feat-title">Real-time Face Tracking</div>
+          <div class="feat-desc">AI camera monitoring detects absence during sessions. Every look-away is logged as a warning with frame-level precision.</div>
+          <span class="feat-tag">VISION_AI</span>
+        </div>
+        <div class="feat-card">
+          <div class="feat-icon"><svg><use href="#ic-clock"/></svg></div>
+          <div class="feat-title">Timed Focus Sessions</div>
+          <div class="feat-desc">Set custom durations from 1–120 min. Add title, notes, and cover art. Sessions are saved to your history automatically.</div>
+          <span class="feat-tag">TIMER_SYS</span>
+        </div>
+        <div class="feat-card">
+          <div class="feat-icon"><svg><use href="#ic-warn"/></svg></div>
+          <div class="feat-title">Warning Analytics</div>
+          <div class="feat-desc">Each session logs distraction warnings with timestamps. Review patterns across sessions to improve focus over time.</div>
+          <span class="feat-tag">ANALYTICS</span>
+        </div>
+        <div class="feat-card">
+          <div class="feat-icon"><svg><use href="#ic-users"/></svg></div>
+          <div class="feat-title">Social Friend Network</div>
+          <div class="feat-desc">Search users by email, send friend requests, and view each other's completed sessions. Accountability is better shared.</div>
+          <span class="feat-tag">SOCIAL</span>
+        </div>
+        <div class="feat-card">
+          <div class="feat-icon"><svg><use href="#ic-msg"/></svg></div>
+          <div class="feat-title">Real-time Messaging</div>
+          <div class="feat-desc">Send texts, share images, and drop motivational content to your focus group. Full inbox with friend requests.</div>
+          <span class="feat-tag">MESSAGING</span>
+        </div>
+        <div class="feat-card">
+          <div class="feat-icon"><svg><use href="#ic-file"/></svg></div>
+          <div class="feat-title">PDF Document Vault</div>
+          <div class="feat-desc">Upload and organize study materials, notes, and references directly in-app. Search by name, access any time.</div>
+          <span class="feat-tag">STORAGE</span>
+        </div>
+        <div class="feat-card">
+          <div class="feat-icon"><svg><use href="#ic-bell"/></svg></div>
+          <div class="feat-title">Session Alarm</div>
+          <div class="feat-desc">Set an end-of-session alarm so you never over-run or forget to start. Built right into the session controls.</div>
+          <span class="feat-tag">ALARM_SYS</span>
+        </div>
+        <div class="feat-card">
+          <div class="feat-icon"><svg><use href="#ic-image"/></svg></div>
+          <div class="feat-title">Session Cover Art</div>
+          <div class="feat-desc">Pick a cover image for each saved session. Build a visual diary of your focus journey with personalized thumbnails.</div>
+          <span class="feat-tag">MEDIA</span>
+        </div>
+        <div class="feat-card">
+          <div class="feat-icon"><svg><use href="#ic-lock"/></svg></div>
+          <div class="feat-title">Secure Auth</div>
+          <div class="feat-desc">Email + password login with change password flow, profile editing, and session-based authentication. Your data stays yours.</div>
+          <span class="feat-tag">SECURITY</span>
+        </div>
+      </div>
+
+      <!-- ABOUT TAB -->
+      <div class="tab-panel" id="tab-about">
+
+        <!-- Row 1: headline + timeline -->
+        <div class="about-hero-row">
+          <div class="about-left">
+            <div class="about-headline">Built for<br>the <span class="acc">disciplined</span><br>generation.</div>
+            <div class="about-body">
+              <p>TaskVault fuses real-time AI face tracking with social accountability. Every session is monitored — look away and it warns you. Succeed and your friends see it.</p>
+              <p>Solo-built Android app. Dark, gold-accented UI for deep work. No clutter, no ads. Just you, your timer, and the camera keeping you honest.</p>
+            </div>
+            <div class="about-specs">
+              <div class="spec-item"><div class="spec-key">Platform</div><div class="spec-val">Android 8.0+</div></div>
+              <div class="spec-item"><div class="spec-key">Version</div><div class="spec-val">1.0.0</div></div>
+              <div class="spec-item"><div class="spec-key">Price</div><div class="spec-val">Free</div></div>
+              <div class="spec-item"><div class="spec-key">AI</div><div class="spec-val">Face Detection</div></div>
+              <div class="spec-item"><div class="spec-key">Storage</div><div class="spec-val">Cloudinary</div></div>
+              <div class="spec-item"><div class="spec-key">Ads</div><div class="spec-val">None</div></div>
+            </div>
+            <div class="about-cta">
+              <a href="Assets/Apk/TaskVault-v1.0.apk" class="btn-cyber" style="font-size:0.75rem;padding:11px 20px;" download="TaskVault-v1.0.apk"
+                 onclick="alert('After download, enable Install from Unknown Sources to install the app.')">
+                <svg width="13" height="13"><use href="#ic-download"/></svg> Download APK
+              </a>
+              <button class="btn-outline" style="font-size:0.62rem;padding:11px 16px;" onclick="switchTab('shots', document.querySelectorAll('.tab')[0])">
+                View Screens <svg width="12" height="12"><use href="#ic-arrow-right"/></svg>
+              </button>
+            </div>
+          </div>
+          <div class="about-right">
+            <div class="timeline-item">
+              <div class="tl-icon"><svg><use href="#ic-target"/></svg></div>
+              <div class="tl-content"><div class="tl-title">Focus Session Monitor</div><div class="tl-desc">Start a timed session. Camera activates. Face tracking begins. Warnings logged live.</div></div>
+            </div>
+            <div class="timeline-item">
+              <div class="tl-icon"><svg><use href="#ic-save"/></svg></div>
+              <div class="tl-content"><div class="tl-title">Save &amp; Reflect</div><div class="tl-desc">Add a title, notes, and cover art. Review warning count and session duration.</div></div>
+            </div>
+            <div class="timeline-item">
+              <div class="tl-icon"><svg><use href="#ic-chart"/></svg></div>
+              <div class="tl-content"><div class="tl-title">Track Progress</div><div class="tl-desc">All sessions stored in history. Scroll completed, abandoned, and ongoing sessions.</div></div>
+            </div>
+            <div class="timeline-item">
+              <div class="tl-icon"><svg><use href="#ic-link"/></svg></div>
+              <div class="tl-content"><div class="tl-title">Social Accountability</div><div class="tl-desc">Friends see your sessions. You see theirs. Send messages. Stay motivated together.</div></div>
+            </div>
+            <div class="timeline-item">
+              <div class="tl-icon"><svg><use href="#ic-book"/></svg></div>
+              <div class="tl-content"><div class="tl-title">PDF Vault</div><div class="tl-desc">Upload study docs. Access them during sessions. Organised in one place.</div></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Row 2: Tech Stack -->
+        <div class="tech-section">
+          <div class="tech-section-title">Tech Stack</div>
+          <div class="tech-grid">
+            <div class="tech-card">
+              <div class="tech-card-icon"><svg><use href="#ic-monitor"/></svg></div>
+              <div class="tech-card-name">Android Studio</div>
+              <div class="tech-card-role">Built natively with XML layouts. Full Material Design component system with custom dark-gold theme.</div>
+              <span class="tech-card-tag">UI_LAYER</span>
+            </div>
+            <div class="tech-card">
+              <div class="tech-card-icon"><svg><use href="#ic-cpu"/></svg></div>
+              <div class="tech-card-name">LottieFiles</div>
+              <div class="tech-card-role">Smooth JSON animations on the onboarding screens for a premium first-launch experience.</div>
+              <span class="tech-card-tag">ANIMATION</span>
+            </div>
+            <div class="tech-card">
+              <div class="tech-card-icon" style="color:#68A063;"><svg><use href="#ic-gear"/></svg></div>
+              <div class="tech-card-name">Node.js Server</div>
+              <div class="tech-card-role">Custom backend for FCM push notifications — friend requests, chat messages, and session alerts.</div>
+              <span class="tech-card-tag">BACKEND</span>
+            </div>
+            <div class="tech-card">
+              <div class="tech-card-icon" style="color:#FFA000;"><svg><use href="#ic-bell"/></svg></div>
+              <div class="tech-card-name">Firebase FCM</div>
+              <div class="tech-card-role">Push notifications delivered via Node.js server for real-time friend requests and incoming messages.</div>
+              <span class="tech-card-tag">PUSH_NOTIFY</span>
+            </div>
+            <div class="tech-card">
+              <div class="tech-card-icon" style="color:#FFA000;"><svg><use href="#ic-file"/></svg></div>
+              <div class="tech-card-name">Firestore</div>
+              <div class="tech-card-role">Primary NoSQL database. Stores sessions, friends, messages, PDFs metadata, and user profiles.</div>
+              <span class="tech-card-tag">DATABASE</span>
+            </div>
+            <div class="tech-card">
+              <div class="tech-card-icon" style="color:#FFA000;"><svg><use href="#ic-lock"/></svg></div>
+              <div class="tech-card-name">Firebase Auth</div>
+              <div class="tech-card-role">Email + password authentication with secure session management and password reset flow.</div>
+              <span class="tech-card-tag">AUTH</span>
+            </div>
+            <div class="tech-card">
+              <div class="tech-card-icon" style="color:#FFA000;"><svg><use href="#ic-dot"/></svg></div>
+              <div class="tech-card-name">Realtime DB</div>
+              <div class="tech-card-role">Tracks live online/offline presence for each user. Updates status instantly on connect and disconnect.</div>
+              <span class="tech-card-tag">PRESENCE</span>
+            </div>
+            <div class="tech-card">
+              <div class="tech-card-icon" style="color:#3448C5;"><svg><use href="#ic-upload"/></svg></div>
+              <div class="tech-card-name">Cloudinary</div>
+              <div class="tech-card-role">Hosts all user-uploaded images and PDF files. Optimised delivery with secure signed uploads.</div>
+              <span class="tech-card-tag">MEDIA_CDN</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+/* ── CANVAS BG ── */
+const canvas = document.getElementById('bg-canvas');
+const ctx = canvas.getContext('2d');
+function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+resize(); window.addEventListener('resize', resize);
+
+const particles = Array.from({length:80},()=>({x:Math.random()*innerWidth,y:Math.random()*innerHeight,vx:(Math.random()-.5)*.3,vy:(Math.random()-.5)*.3,r:Math.random()*1.5,alpha:Math.random()*.4+.1,gold:Math.random()>.6,red:Math.random()>.9}));
+const streams = Array.from({length:12},()=>{const s={x:Math.random()*innerWidth,y:Math.random()*innerHeight,speed:Math.random()*1.5+.5,chars:'01 FOCUS TASK VAULT WARN SESSION FACE TRACK'.split(' '),alpha:Math.random()*.12+.04,len:Math.floor(Math.random()*8+4),col:[]};for(let j=0;j<s.len;j++)s.col.push(Math.random()*.8+.2);return s;});
+let t=0;
+function drawBg(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  const grad=ctx.createRadialGradient(canvas.width*.6,canvas.height*.5,0,canvas.width*.6,canvas.height*.5,canvas.width*.7);
+  grad.addColorStop(0,'rgba(30,22,8,0.95)');grad.addColorStop(.5,'rgba(8,6,3,0.98)');grad.addColorStop(1,'rgba(3,2,8,1)');
+  ctx.fillStyle=grad;ctx.fillRect(0,0,canvas.width,canvas.height);
+  const pulse=Math.sin(t*.01)*.5+.5;
+  const g2=ctx.createRadialGradient(canvas.width*.65,canvas.height*.5,0,canvas.width*.65,canvas.height*.5,400);
+  g2.addColorStop(0,`rgba(201,168,76,${.06+pulse*.03})`);g2.addColorStop(1,'rgba(201,168,76,0)');
+  ctx.fillStyle=g2;ctx.fillRect(0,0,canvas.width,canvas.height);
+  const g3=ctx.createRadialGradient(0,canvas.height,0,0,canvas.height,300);
+  g3.addColorStop(0,'rgba(192,57,43,0.05)');g3.addColorStop(1,'rgba(192,57,43,0)');
+  ctx.fillStyle=g3;ctx.fillRect(0,0,canvas.width,canvas.height);
+  const vx=canvas.width*.6,vy=canvas.height*.5,hz=canvas.height*.52;
+  for(let x=-20;x<=30;x++){ctx.beginPath();ctx.moveTo(vx,vy);ctx.lineTo(vx+x*180,canvas.height);ctx.strokeStyle='rgba(201,168,76,0.04)';ctx.lineWidth=1;ctx.stroke();}
+  for(let r=1;r<=10;r++){const p=r/10,y=hz+(canvas.height-hz)*(p*p),sp=800*p;ctx.beginPath();ctx.moveTo(vx-sp,y);ctx.lineTo(vx+sp,y);ctx.strokeStyle=r%3===0?'rgba(201,168,76,0.07)':'rgba(201,168,76,0.015)';ctx.lineWidth=r%3===0?1:.5;ctx.stroke();}
+  const hg=ctx.createLinearGradient(canvas.width*.3,0,canvas.width,0);
+  hg.addColorStop(0,'rgba(201,168,76,0)');hg.addColorStop(.3,`rgba(201,168,76,${.15+pulse*.1})`);hg.addColorStop(.7,`rgba(201,168,76,${.1+pulse*.08})`);hg.addColorStop(1,'rgba(201,168,76,0)');
+  ctx.fillStyle=hg;ctx.fillRect(0,hz-1,canvas.width,2);
+  if(Math.random()<.01){ctx.fillStyle=`rgba(201,168,76,${Math.random()*.08})`;ctx.fillRect(canvas.width*.4,Math.random()*canvas.height,canvas.width*.6,Math.random()*2+1);}
+  particles.forEach(p=>{p.x+=p.vx;p.y+=p.vy;if(p.x<0)p.x=canvas.width;if(p.x>canvas.width)p.x=0;if(p.y<0)p.y=canvas.height;if(p.y>canvas.height)p.y=0;ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);ctx.fillStyle=p.red?`rgba(192,57,43,${p.alpha})`:p.gold?`rgba(201,168,76,${p.alpha})`:`rgba(245,237,216,${p.alpha*.3})`;ctx.fill();});
+  ctx.font='10px "Share Tech Mono",monospace';
+  streams.forEach(s=>{s.y+=s.speed;if(s.y>canvas.height+200){s.y=-200;s.x=Math.random()*canvas.width;}s.col.forEach((a,i)=>{ctx.fillStyle=`rgba(201,168,76,${a*s.alpha})`;ctx.fillText(s.chars[Math.floor(Math.random()*s.chars.length)],s.x,s.y-i*16);});});
+  t++;requestAnimationFrame(drawBg);
+}
+drawBg();
+
+/* ── PHONE DRAG ── */
+const phone=document.getElementById('phone3d');
+let isDragging=false,startX,startY;
+phone.addEventListener('mousedown',e=>{isDragging=true;startX=e.clientX;startY=e.clientY;phone.style.animation='none';e.preventDefault();});
+document.addEventListener('mousemove',e=>{if(!isDragging)return;const rx=Math.max(-60,Math.min(60,-18+(e.clientX-startX)*.3));const ry=Math.max(-20,Math.min(20,4-(e.clientY-startY)*.2));phone.style.transform=`rotateY(${rx}deg) rotateX(${ry}deg)`;});
+document.addEventListener('mouseup',()=>{if(!isDragging)return;isDragging=false;phone.style.transition='transform 1s ease';phone.style.transform='rotateY(-18deg) rotateX(4deg)';setTimeout(()=>{phone.style.transition='';phone.style.animation='phoneFloat 6s ease-in-out infinite,phoneRotate 20s ease-in-out infinite';},1000);});
+phone.addEventListener('touchstart',e=>{isDragging=true;startX=e.touches[0].clientX;startY=e.touches[0].clientY;phone.style.animation='none';});
+document.addEventListener('touchmove',e=>{if(!isDragging)return;const rx=Math.max(-70,Math.min(70,-18+(e.touches[0].clientX-startX)*.4));const ry=Math.max(-25,Math.min(25,4-(e.touches[0].clientY-startY)*.3));phone.style.transform=`rotateY(${rx}deg) rotateX(${ry}deg)`;});
+document.addEventListener('touchend',()=>{isDragging=false;phone.style.transition='transform 1s ease';phone.style.transform='rotateY(-18deg) rotateX(4deg)';setTimeout(()=>{phone.style.transition='';phone.style.animation='phoneFloat 6s ease-in-out infinite,phoneRotate 20s ease-in-out infinite';},1000);});
+
+let secs=0;
+setInterval(()=>{secs++;const m=String(Math.floor(secs/60)).padStart(2,'0'),s=String(secs%60).padStart(2,'0');document.getElementById('timer').textContent=`${m}:${s}`;},1000);
+
+/* ── PAGE TRANSITIONS ── */
+const isMobile = () => window.innerWidth <= 900;
+function goToScreens(){
+  document.getElementById('page-hero').classList.add('hidden');
+  document.getElementById('page-screens').classList.remove('hidden');
+  document.getElementById('hud-badge').textContent='SYS::SCREENS_VIEW ▮';
+  if(isMobile()) window.scrollTo(0,0);
+  initShots();
+}
+function goToHero(){
+  document.getElementById('page-screens').classList.add('hidden');
+  document.getElementById('page-hero').classList.remove('hidden');
+  document.getElementById('hud-badge').textContent='SYS::TASKVAULT_v1.0.0 ▮';
+  if(isMobile()) window.scrollTo(0,0);
+}
+function switchTab(id,btn){document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));document.getElementById('tab-'+id).classList.add('active');btn.classList.add('active');}
+
+/* ── SVG ICON HELPER (for use inside inline HTML strings) ── */
+function svgUse(id,w=12,h=12,col='#C9A84C'){return `<svg width="${w}" height="${h}" viewBox="0 0 24 24" fill="none" stroke="${col}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:middle;flex-shrink:0;"><use href="#${id}"/></svg>`;}
+
+/* ── SCREEN BUILDERS ── */
+function buildHomeScreen(){return `<div style="background:linear-gradient(180deg,#0E0C07,#0A0806);padding:16px;min-height:430px;font-family:'DM Sans',sans-serif;">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+    <span style="font-family:'Syne',sans-serif;font-weight:900;font-size:1rem;color:#F5EDD8;">TaskVault</span>
+    ${svgUse('ic-msg',16,16,'#C9A84C')}
+  </div>
+  <div style="background:rgba(255,255,255,0.04);border-radius:8px;padding:8px 12px;font-size:0.65rem;color:#6B5520;margin-bottom:12px;display:flex;align-items:center;gap:6px;">${svgUse('ic-search',11,11,'#6B5520')} Search friends...</div>
+  <div style="font-size:0.5rem;letter-spacing:2px;color:#6B5520;margin-bottom:8px;font-family:'Share Tech Mono',monospace;">FRIENDS</div>
+  <div style="display:flex;gap:8px;margin-bottom:14px;">
+    <div style="display:flex;flex-direction:column;align-items:center;gap:4px;"><div style="width:36px;height:36px;border-radius:50%;background:#C9A84C;display:grid;place-items:center;color:#0A0806;">${svgUse('ic-plus',14,14,'#0A0806')}</div><span style="font-size:0.45rem;color:#6B5520;">Add</span></div>
+    <div style="display:flex;flex-direction:column;align-items:center;gap:4px;"><div style="width:36px;height:36px;border-radius:50%;background:#2A2218;border:2px solid #C9A84C;display:grid;place-items:center;">${svgUse('ic-user',16,16,'#C9A84C')}</div><span style="font-size:0.45rem;color:#8A7D62;">Ahmed</span></div>
+    <div style="display:flex;flex-direction:column;align-items:center;gap:4px;"><div style="width:36px;height:36px;border-radius:50%;background:#1A1A1A;display:grid;place-items:center;">${svgUse('ic-user',16,16,'#6B5520')}</div><span style="font-size:0.45rem;color:#6B5520;">Shaan</span></div>
+  </div>
+  <div style="background:rgba(201,168,76,0.06);border:1px solid rgba(201,168,76,0.2);border-radius:10px;padding:12px;margin-bottom:8px;">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px;">
+      <span style="font-family:'Syne',sans-serif;font-weight:800;font-size:0.8rem;">Less Warning</span>
+      <div style="display:flex;gap:4px;align-items:center;"><span style="background:#C0392B;color:white;font-size:0.55rem;padding:2px 7px;border-radius:20px;display:flex;align-items:center;gap:3px;">${svgUse('ic-warn',8,8,'white')} 4</span><span style="border:1px solid #C9A84C;color:#C9A84C;font-size:0.55rem;padding:2px 7px;border-radius:20px;">Done</span></div>
+    </div>
+    <div style="font-size:0.6rem;color:#6B5520;margin-bottom:6px;">Jan 01, 05:30 am · it's needed faceup</div>
+    <div style="display:flex;gap:10px;font-size:0.58rem;color:#6B5520;align-items:center;"><span style="display:flex;align-items:center;gap:3px;">${svgUse('ic-clock',9,9,'#6B5520')} 1 min</span><span style="display:flex;align-items:center;gap:3px;">${svgUse('ic-warn',9,9,'#6B5520')} 4 warnings</span><span style="color:#C9A84C;display:flex;align-items:center;gap:3px;">${svgUse('ic-image',9,9,'#C9A84C')} Cover</span></div>
+  </div>
+  <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:12px;">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px;">
+      <span style="font-family:'Syne',sans-serif;font-weight:800;font-size:0.8rem;">Testing</span>
+      <div style="display:flex;gap:4px;"><span style="background:#C0392B;color:white;font-size:0.55rem;padding:2px 7px;border-radius:20px;display:flex;align-items:center;gap:3px;">${svgUse('ic-warn',8,8,'white')} 3</span><span style="border:1px solid #C9A84C;color:#C9A84C;font-size:0.55rem;padding:2px 7px;border-radius:20px;">Done</span></div>
+    </div>
+    <div style="font-size:0.6rem;color:#6B5520;">Jan 01 · testing integration</div>
+  </div>
+</div>`;}
+
+function buildMonitorScreen(){return `<div style="background:linear-gradient(180deg,#0E0C07,#0A0806);padding:16px;min-height:430px;font-family:'DM Sans',sans-serif;">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+    <span style="font-family:'Syne',sans-serif;font-weight:800;font-size:0.9rem;color:#F5EDD8;">Focus Session</span>
+    ${svgUse('ic-gear',14,14,'#C9A84C')}
+  </div>
+  <div style="background:#1A1710;border-radius:12px;padding:14px;text-align:center;margin-bottom:10px;">
+    <div style="font-family:'Syne',sans-serif;font-size:2.2rem;font-weight:900;color:#C9A84C;text-shadow:0 0 20px rgba(201,168,76,0.5);">00:45</div>
+  </div>
+  <div style="display:flex;gap:8px;margin-bottom:10px;align-items:center;">
+    <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(201,168,76,0.15);border-radius:10px;padding:8px 12px;flex:1;font-size:0.7rem;color:#F5EDD8;display:flex;align-items:center;gap:5px;">${svgUse('ic-clock',11,11,'#C9A84C')} 1 min</div>
+    <div style="background:rgba(255,255,255,0.06);border-radius:10px;padding:8px 14px;font-size:0.7rem;color:#F5EDD8;font-weight:600;display:flex;align-items:center;gap:5px;">${svgUse('ic-bell',11,11,'#F5EDD8')} Alarm</div>
+  </div>
+  <div style="background:rgba(192,57,43,0.25);border:1px solid rgba(192,57,43,0.4);border-radius:10px;padding:11px;text-align:center;font-family:'Syne',sans-serif;font-weight:800;font-size:0.75rem;color:#FF6B6B;margin-bottom:10px;display:flex;align-items:center;justify-content:center;gap:6px;">${svgUse('ic-stop',12,12,'#FF6B6B')} Stop Session</div>
+  <div style="background:#333;border-radius:10px;min-height:80px;display:flex;align-items:center;justify-content:center;font-size:0.65rem;color:#6B5520;margin-bottom:10px;border:1px solid rgba(201,168,76,0.08);gap:6px;">${svgUse('ic-camera',14,14,'#6B5520')} Camera Feed Active</div>
+  <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(201,168,76,0.1);border-radius:8px;padding:8px 12px;display:flex;justify-content:space-between;margin-bottom:8px;">
+    <span style="color:#E74C3C;font-size:0.65rem;font-weight:600;display:flex;align-items:center;gap:4px;">${svgUse('ic-warn',10,10,'#E74C3C')} Warnings: 2</span>
+    <span style="color:#6B5520;font-size:0.6rem;font-family:'Share Tech Mono',monospace;">Faces: 2 | Frames: 72</span>
+  </div>
+  <div style="background:rgba(192,57,43,0.08);border:1px solid rgba(192,57,43,0.2);border-radius:8px;padding:8px 12px;">
+    <div style="color:#FF4444;font-size:0.62rem;font-weight:600;display:flex;align-items:center;gap:4px;">${svgUse('ic-warn',10,10,'#FF4444')} Face not visible!</div>
+    <div style="color:#6B5520;font-size:0.58rem;margin-top:2px;">Real-time face tracking active</div>
+  </div>
+</div>`;}
+
+function buildSaveScreen(){return `<div style="background:linear-gradient(180deg,#0E0C07,#0A0806);padding:16px;min-height:430px;font-family:'DM Sans',sans-serif;">
+  <div style="font-family:'Syne',sans-serif;font-weight:900;font-size:1rem;color:#C9A84C;text-align:center;margin-bottom:12px;">Save Your Session</div>
+  <div style="background:linear-gradient(135deg,#2A2218,#1A1710);border-radius:12px;min-height:90px;display:flex;align-items:center;justify-content:center;margin-bottom:8px;border:1px solid rgba(201,168,76,0.15);">${svgUse('ic-image',32,32,'#6B5520')}</div>
+  <div style="text-align:center;font-size:0.62rem;color:#C9A84C;margin-bottom:12px;font-weight:600;display:flex;align-items:center;justify-content:center;gap:5px;">${svgUse('ic-camera',11,11,'#C9A84C')} Change Cover Image</div>
+  <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(201,168,76,0.15);border-radius:8px;padding:10px;font-size:0.8rem;color:#F5EDD8;margin-bottom:8px;">TEST</div>
+  <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(201,168,76,0.1);border-radius:8px;padding:10px;font-size:0.7rem;color:#8A7D62;margin-bottom:12px;min-height:40px;">Testing For BlackBook...</div>
+  <div style="border-top:1px solid rgba(255,255,255,0.06);padding-top:10px;display:flex;flex-direction:column;gap:6px;margin-bottom:12px;">
+    <div style="display:flex;justify-content:space-between;font-size:0.7rem;"><span style="color:#6B5520;display:flex;align-items:center;gap:4px;">${svgUse('ic-clock',10,10,'#6B5520')} Total Duration</span><span style="color:#C9A84C;font-weight:600;">1 min</span></div>
+    <div style="display:flex;justify-content:space-between;font-size:0.7rem;"><span style="color:#6B5520;display:flex;align-items:center;gap:4px;">${svgUse('ic-warn',10,10,'#6B5520')} Warnings Triggered</span><span style="color:#E74C3C;font-weight:600;">2</span></div>
+  </div>
+  <div style="background:#C9A84C;border-radius:10px;padding:12px;text-align:center;font-family:'Syne',sans-serif;font-weight:800;font-size:0.78rem;color:#05040A;display:flex;align-items:center;justify-content:center;gap:7px;">${svgUse('ic-save',12,12,'#05040A')} Finish &amp; Save</div>
+</div>`;}
+
+function buildSettingsScreen(){return `<div style="background:linear-gradient(180deg,#0E0C07,#0A0806);padding:16px;min-height:430px;font-family:'DM Sans',sans-serif;">
+  <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(201,168,76,0.12);border-radius:12px;padding:14px;display:flex;align-items:center;gap:12px;margin-bottom:16px;">
+    <div style="width:48px;height:48px;border-radius:50%;border:2px solid #C9A84C;background:#2A2218;display:grid;place-items:center;flex-shrink:0;">${svgUse('ic-user',22,22,'#C9A84C')}</div>
+    <div>
+      <div style="font-family:'Syne',sans-serif;font-weight:800;font-size:0.9rem;color:#F5EDD8;">Shaikh Arbaz</div>
+      <div style="font-size:0.6rem;color:#6B5520;margin:2px 0;">arbaz@icloud.com</div>
+      <div style="color:#C9A84C;font-size:0.68rem;font-weight:600;display:flex;align-items:center;gap:4px;">${svgUse('ic-edit',10,10,'#C9A84C')} Edit Profile</div>
+    </div>
+  </div>
+  <div style="font-size:0.5rem;letter-spacing:2px;color:#6B5520;margin-bottom:8px;font-family:'Share Tech Mono',monospace;">ACCOUNT</div>
+  <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(201,168,76,0.1);border-radius:12px;overflow:hidden;margin-bottom:16px;">
+    <div style="padding:12px 14px;border-bottom:1px solid rgba(255,255,255,0.05);display:flex;align-items:center;gap:10px;">${svgUse('ic-lock',13,13,'#C9A84C')}<div><div style="font-size:0.78rem;font-weight:600;color:#F5EDD8;">Change Password</div><div style="font-size:0.58rem;color:#6B5520;">Update your account password</div></div></div>
+    <div style="padding:12px 14px;display:flex;align-items:center;gap:10px;">${svgUse('ic-file',13,13,'#C9A84C')}<div><div style="font-size:0.78rem;font-weight:600;color:#F5EDD8;">View PDF</div><div style="font-size:0.58rem;color:#6B5520;">View all PDFs</div></div></div>
+  </div>
+  <div style="font-size:0.5rem;letter-spacing:2px;color:#6B5520;margin-bottom:8px;font-family:'Share Tech Mono',monospace;">APP INFO</div>
+  <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(201,168,76,0.1);border-radius:12px;overflow:hidden;margin-bottom:16px;">
+    <div style="padding:12px 14px;border-bottom:1px solid rgba(255,255,255,0.05);display:flex;justify-content:space-between;font-size:0.78rem;"><span style="color:#F5EDD8;">About TaskVault</span>${svgUse('ic-chevron-r',12,12,'#6B5520')}</div>
+    <div style="padding:12px 14px;display:flex;justify-content:space-between;font-size:0.78rem;"><span style="color:#F5EDD8;">App Version</span><span style="color:#6B5520;">1.0.0</span></div>
+  </div>
+  <div style="background:rgba(192,57,43,0.15);border:1px solid rgba(192,57,43,0.3);border-radius:10px;padding:12px;text-align:center;color:#FF6B6B;font-weight:700;font-size:0.8rem;display:flex;align-items:center;justify-content:center;gap:7px;">${svgUse('ic-logout',13,13,'#FF6B6B')} Log Out</div>
+</div>`;}
+
+function buildInboxScreen(){return `<div style="background:linear-gradient(180deg,#0E0C07,#0A0806);padding:16px;min-height:430px;font-family:'DM Sans',sans-serif;">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+    <span style="font-family:'Syne',sans-serif;font-weight:900;font-size:1rem;color:#F5EDD8;">Inbox</span>
+    ${svgUse('ic-edit',15,15,'#C9A84C')}
+  </div>
+  <div style="font-size:0.5rem;letter-spacing:2px;color:#6B5520;margin-bottom:4px;font-family:'Share Tech Mono',monospace;">FRIEND REQUESTS</div>
+  <div style="font-size:0.62rem;color:#6B5520;margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid rgba(255,255,255,0.06);">0 pending</div>
+  <div style="font-size:0.5rem;letter-spacing:2px;color:#6B5520;margin-bottom:10px;font-family:'Share Tech Mono',monospace;">MESSAGES</div>
+  ${['Ahmed Khan','Saif Kapadi','shaan ali'].map((name,i)=>`<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.04);">
+    <div style="width:36px;height:36px;border-radius:50%;background:#2A2218;flex-shrink:0;display:grid;place-items:center;">${svgUse('ic-user',16,16,'#6B5520')}</div>
+    <div style="flex:1;"><div style="font-size:0.78rem;font-weight:600;color:#F5EDD8;">${name}</div><div style="font-size:0.62rem;color:#6B5520;">${['Hiii','Hhh','hello'][i]}</div></div>
+    <div style="font-size:0.58rem;color:#6B5520;font-family:'Share Tech Mono',monospace;">2:34 PM</div>
+  </div>`).join('')}
+</div>`;}
+
+function buildChatScreen(){return `<div style="background:linear-gradient(180deg,#0E0C07,#0A0806);padding:0;min-height:430px;font-family:'DM Sans',sans-serif;display:flex;flex-direction:column;">
+  <div style="padding:14px 16px 10px;border-bottom:1px solid rgba(255,255,255,0.06);display:flex;align-items:center;gap:10px;background:rgba(10,8,6,0.8);">
+    <div style="width:32px;height:32px;border-radius:50%;background:#2A2218;display:grid;place-items:center;">${svgUse('ic-user',14,14,'#6B5520')}</div>
+    <div><div style="font-size:0.8rem;font-weight:700;color:#F5EDD8;">shaan ali</div><div style="font-size:0.58rem;color:#6B5520;">Last seen 12:03 pm</div></div>
+  </div>
+  <div style="flex:1;padding:12px 12px 8px;display:flex;flex-direction:column;gap:8px;overflow:hidden;">
+    <div style="display:flex;gap:8px;align-items:flex-end;"><div style="width:22px;height:22px;border-radius:50%;background:#2A2218;flex-shrink:0;"></div><div style="background:#2A2218;padding:7px 11px;border-radius:12px 12px 12px 0;font-size:0.72rem;color:#F5EDD8;">Hi</div></div>
+    <div style="display:flex;gap:8px;align-items:flex-end;"><div style="width:22px;height:22px;border-radius:50%;background:#2A2218;flex-shrink:0;"></div><div style="background:#2A2218;padding:7px 11px;border-radius:12px 12px 12px 0;font-size:0.72rem;color:#F5EDD8;">hello</div></div>
+    <div style="display:flex;gap:8px;align-items:flex-end;justify-content:flex-end;"><div style="background:#C9A84C;padding:7px 11px;border-radius:12px 12px 0 12px;font-size:0.72rem;color:#0A0806;font-weight:600;">Hello</div><div style="width:22px;height:22px;border-radius:50%;background:#2A2218;flex-shrink:0;"></div></div>
+    <div style="display:flex;gap:8px;align-items:flex-end;justify-content:flex-end;"><div style="background:#C9A84C;padding:7px 11px;border-radius:12px 12px 0 12px;display:grid;place-items:center;">${svgUse('ic-smile',14,14,'#0A0806')}</div><div style="width:22px;height:22px;border-radius:50%;background:#2A2218;flex-shrink:0;"></div></div>
+    <div style="display:flex;gap:8px;align-items:flex-end;justify-content:flex-end;"><div style="background:linear-gradient(135deg,#1a1a2e,#2d1b4e);padding:10px 11px;border-radius:12px 12px 0 12px;font-size:0.6rem;color:#F5EDD8;max-width:130px;border:1px solid rgba(201,168,76,0.2);">If you can change your mind, you can change your life. — William James</div><div style="width:22px;height:22px;border-radius:50%;background:#2A2218;flex-shrink:0;"></div></div>
+  </div>
+  <div style="padding:8px 12px;background:rgba(26,23,16,0.9);display:flex;align-items:center;gap:8px;border-top:1px solid rgba(255,255,255,0.06);">
+    ${svgUse('ic-smile',16,16,'#6B5520')}
+    <div style="flex:1;background:rgba(255,255,255,0.04);border-radius:20px;padding:7px 12px;font-size:0.65rem;color:#6B5520;">Message...</div>
+    ${svgUse('ic-clip',16,16,'#6B5520')}
+    ${svgUse('ic-send',16,16,'#C9A84C')}
+  </div>
+</div>`;}
+
+function buildPDFScreen(){return `<div style="background:linear-gradient(180deg,#0E0C07,#0A0806);padding:16px;min-height:430px;font-family:'DM Sans',sans-serif;position:relative;">
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
+    <div style="width:36px;height:36px;border-radius:10px;background:rgba(201,168,76,0.12);display:grid;place-items:center;">${svgUse('ic-file',18,18,'#C9A84C')}</div>
+    <div><div style="font-family:'Syne',sans-serif;font-weight:800;font-size:0.9rem;color:#F5EDD8;">My PDFs</div><div style="font-size:0.6rem;color:#6B5520;">2 documents</div></div>
+    <div style="margin-left:auto;width:28px;height:28px;border-radius:50%;background:rgba(255,255,255,0.06);display:grid;place-items:center;cursor:pointer;">${svgUse('ic-x',13,13,'#6B5520')}</div>
+  </div>
+  <div style="background:rgba(255,255,255,0.04);border-radius:8px;padding:8px 12px;font-size:0.65rem;color:#6B5520;margin-bottom:12px;display:flex;align-items:center;gap:6px;">${svgUse('ic-search',11,11,'#6B5520')} Search PDFs...</div>
+  ${['test','kk'].map(name=>`<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(201,168,76,0.1);border-radius:10px;padding:12px;display:flex;align-items:center;gap:12px;margin-bottom:8px;">
+    <div style="width:36px;height:36px;border-radius:8px;background:rgba(201,168,76,0.08);display:grid;place-items:center;flex-shrink:0;">${svgUse('ic-file',16,16,'#C9A84C')}</div>
+    <div style="flex:1;"><div style="font-size:0.8rem;font-weight:600;color:#F5EDD8;">${name}</div><div style="font-size:0.6rem;color:#6B5520;display:flex;align-items:center;gap:4px;">${svgUse('ic-clock',9,9,'#6B5520')} Feb 23, 2026</div></div>
+    ${svgUse('ic-chevron-r',12,12,'#6B5520')}
+  </div>`).join('')}
+  <div style="position:absolute;bottom:16px;right:16px;background:#C9A84C;border-radius:10px;padding:10px 16px;display:flex;align-items:center;gap:8px;font-family:'Syne',sans-serif;font-weight:700;font-size:0.75rem;color:#05040A;">${svgUse('ic-upload',13,13,'#05040A')} PDF</div>
+</div>`;}
+
+function buildLoginScreen(){return `<div style="background:linear-gradient(180deg,#0E0C07,#0A0806);padding:24px 16px;min-height:430px;font-family:'DM Sans',sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;">
+  <div style="width:52px;height:52px;background:#C9A84C;border-radius:14px;display:grid;place-items:center;margin-bottom:4px;">${svgUse('ic-check',28,28,'#05040A')}</div>
+  <div style="text-align:center;"><div style="font-family:'Syne',sans-serif;font-weight:900;font-size:1.3rem;color:#F5EDD8;">Welcome Back</div><div style="font-size:0.68rem;color:#6B5520;margin-top:4px;">Sign in to continue</div></div>
+  <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(201,168,76,0.12);border-radius:12px;padding:12px;width:100%;display:flex;flex-direction:column;gap:8px;">
+    <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:10px 12px;font-size:0.7rem;color:#6B5520;">Email Address</div>
+    <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:10px 12px;font-size:0.7rem;color:#6B5520;display:flex;justify-content:space-between;align-items:center;"><span>Password</span>${svgUse('ic-eye',13,13,'#6B5520')}</div>
+    <div style="text-align:right;font-size:0.62rem;color:#C9A84C;font-weight:600;margin-top:2px;">Forgot Password?</div>
+  </div>
+  <div style="background:#C9A84C;border-radius:10px;padding:12px;text-align:center;font-family:'Syne',sans-serif;font-weight:800;font-size:0.78rem;color:#05040A;width:100%;display:flex;align-items:center;justify-content:center;gap:7px;">${svgUse('ic-key',12,12,'#05040A')} Login</div>
+  <div style="font-size:0.65rem;color:#6B5520;text-align:center;">Don't have an account? <span style="color:#C9A84C;font-weight:600;">Sign Up</span></div>
+</div>`;}
+
+/* ── SHOTS DATA ── */
+const shots=[
+  {name:'Home Feed',tag:'DASHBOARD',desc:'Your command center. See friends, recent sessions, and warning counts at a glance. Switch between your sessions and friends with one tap.',
+   features:[{icon:'ic-users',title:'Friends bar',text:'Quick-access profile circles at the top for your connected friends.'},{icon:'ic-inbox',title:'Session cards',text:'Every saved session shows warnings, duration, cover art, and status.'},{icon:'ic-search',title:'Friend search',text:'Search any user by name or email to send a friend request.'}],screen:buildHomeScreen()},
+  {name:'Focus Monitor',tag:'LIVE_SESSION',desc:'The session is running. Camera is active. The timer counts up. Every frame is analyzed. If your face disappears, a warning fires.',
+   features:[{icon:'ic-camera',title:'Live camera',text:'Real-time camera feed displayed during the session with face detection active.'},{icon:'ic-warn',title:'Warning counter',text:'Warnings increment instantly when face is not detected.'},{icon:'ic-stop',title:'Stop control',text:'A big red Stop Session button to end and save at any time.'}],screen:buildMonitorScreen()},
+  {name:'Save Session',tag:'POST_SESSION',desc:'When your session ends, finalize it. Add a title, optional notes, and a cover image. Review your warning count before saving.',
+   features:[{icon:'ic-image',title:'Cover image',text:'Pick any image as the visual memory for this session.'},{icon:'ic-edit',title:'Notes field',text:'Optional text field to write what you worked on or how you felt.'},{icon:'ic-save',title:'Finish & Save',text:'One tap saves everything to your session history permanently.'}],screen:buildSaveScreen()},
+  {name:'Settings',tag:'PROFILE',desc:'View your profile, change your password, access your PDF vault, and see app info. Everything in a clean, organized settings panel.',
+   features:[{icon:'ic-edit',title:'Edit profile',text:'Update your name, photo, and email address at any time.'},{icon:'ic-lock',title:'Change password',text:'Secure password update with old/new password fields.'},{icon:'ic-file',title:'PDF Vault',text:'Access all your uploaded documents from the settings screen.'}],screen:buildSettingsScreen()},
+  {name:'Inbox',tag:'MESSAGING',desc:'All your conversations in one place. Friend requests shown at the top. Message any friend to share progress or motivation.',
+   features:[{icon:'ic-inbox',title:'Friend requests',text:'Pending requests are surfaced at the top of the inbox.'},{icon:'ic-msg',title:'Conversations',text:'Full chat threads with each friend — text, emoji, and images.'},{icon:'ic-clock',title:'Last message',text:'Preview the latest message and timestamp for each thread.'}],screen:buildInboxScreen()},
+  {name:'Chat Screen',tag:'MESSAGING',desc:'One-on-one real-time chat. Send text, emoji, and images. See when your friend was last active. Share motivational quotes.',
+   features:[{icon:'ic-dot',title:'Last seen',text:'Shows when your friend was last active in the app.'},{icon:'ic-clip',title:'Image sharing',text:'Attach and send images directly in the conversation.'},{icon:'ic-smile',title:'Emoji support',text:'Full emoji picker for expressive messages.'}],screen:buildChatScreen()},
+  {name:'PDF Vault',tag:'STORAGE',desc:'Upload, search, and access your study documents. Name each PDF for easy retrieval. Your knowledge base lives inside TaskVault.',
+   features:[{icon:'ic-upload',title:'Upload PDFs',text:'Upload any PDF from your device and give it a recognizable name.'},{icon:'ic-search',title:'Search docs',text:'Instantly filter through all your documents by name.'},{icon:'ic-folder',title:'Document count',text:'See total document count and last upload date at a glance.'}],screen:buildPDFScreen()},
+  {name:'Login / Sign Up',tag:'AUTH',desc:'Clean, minimal authentication screens. Login with email and password. Sign up with name, email, phone, and password. Forgot password supported.',
+   features:[{icon:'ic-key',title:'Secure login',text:'Email + password auth with password visibility toggle.'},{icon:'ic-edit',title:'Registration',text:'Full name, email, phone number, and password to create account.'},{icon:'ic-refresh',title:'Forgot password',text:'One-tap password reset flow from the login screen.'}],screen:buildLoginScreen()}
+];
+
+let currentShot=0,shotsInitialized=false;
+
+function initShots(){
+  if(shotsInitialized)return;shotsInitialized=true;
+  document.getElementById('shots-sidebar').innerHTML=shots.map((s,i)=>`
+    <div class="shot-thumb ${i===0?'active':''}" onclick="selectShot(${i})">
+      <div class="shot-thumb-num">0${i+1}</div>
+      <div class="shot-thumb-info"><div class="shot-thumb-name">${s.name}</div><div class="shot-thumb-tag">${s.tag}</div></div>
+    </div>`).join('');
+  document.getElementById('pnav-dots').innerHTML=shots.map((_,i)=>`<div class="pnav-dot ${i===0?'active':''}" onclick="selectShot(${i})"></div>`).join('');
+  selectShot(0);
+}
+
+function selectShot(idx){
+  currentShot=idx;const s=shots[idx];
+  document.querySelectorAll('.shot-thumb').forEach((el,i)=>el.classList.toggle('active',i===idx));
+  document.querySelectorAll('.pnav-dot').forEach((el,i)=>el.classList.toggle('active',i===idx));
+  const preview=document.getElementById('preview-screen');
+  preview.style.opacity='0';preview.style.transform='scale(0.95)';preview.style.transition='opacity 0.2s,transform 0.2s';
+  setTimeout(()=>{preview.innerHTML=s.screen;preview.style.opacity='1';preview.style.transform='scale(1)';},200);
+  document.getElementById('shot-info-panel').innerHTML=`
+    <div class="sip-tag">${s.tag}</div>
+    <div class="sip-name">${s.name}</div>
+    <div class="sip-desc">${s.desc}</div>
+    <div class="sip-features">${s.features.map(f=>`
+      <div class="sip-feature">
+        <div class="sip-feature-icon"><svg width="14" height="14"><use href="#${f.icon}"/></svg></div>
+        <div class="sip-feature-text"><strong>${f.title}</strong> — ${f.text}</div>
+      </div>`).join('')}</div>
+    <div class="sip-counter">SCREEN <span>${String(idx+1).padStart(2,'0')}</span> / <span>${String(shots.length).padStart(2,'0')}</span></div>`;
+  const thumbs=document.querySelectorAll('.shot-thumb');
+  if(thumbs[idx])thumbs[idx].scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+
+function nextShot(){selectShot((currentShot+1)%shots.length);}
+function prevShot(){selectShot((currentShot-1+shots.length)%shots.length);}
+
+document.addEventListener('keydown',e=>{
+  if(document.getElementById('page-screens').classList.contains('hidden'))return;
+  if(e.key==='ArrowRight')nextShot();
+  if(e.key==='ArrowLeft')prevShot();
+  if(e.key==='Escape')goToHero();
+});
+</script>
+</body>
+</html>
