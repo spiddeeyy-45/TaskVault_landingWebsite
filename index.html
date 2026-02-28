@@ -339,7 +339,12 @@ html, body {
   .page { position: relative; height: auto; min-height: 100vh; transition: none; }
   .page.hidden { display: none !important; opacity: 1; pointer-events: auto; transform: none; }
   #page-hero.hidden, #page-screens.hidden { transform: none; }
-  #page-screens { overflow: visible; }
+
+  /* KEY FIX: screens page must scroll on mobile */
+  #page-screens { overflow-x: hidden; overflow-y: auto !important; }
+  .screens-page { height: auto; min-height: 100dvh; overflow: visible; }
+  .sp-content { height: auto !important; overflow: visible !important; padding-bottom: 40px; }
+  .tab-panel { height: auto !important; overflow: visible !important; }
 
   /* HUD */
   .hud-bottom { display: none; }
@@ -359,23 +364,33 @@ html, body {
 
   /* screens page layout */
   .screens-page { padding: 0 4vw; }
-  .sp-content { overflow: visible; height: auto; }
-  .tab-panel { height: auto; }
-  .tab-panel.active { display: flex !important; }
 
-  /* screenshots: sidebar becomes horizontal scroll row */
-  #tab-shots { flex-direction: column; gap: 16px; height: auto; align-items: stretch; }
-  .shots-sidebar { width: 100%; flex-direction: row; flex-wrap: nowrap; overflow-x: auto; overflow-y: visible; padding-right: 0; padding-bottom: 4px; gap: 6px; }
+  /* screenshots: full vertical stack */
+  #tab-shots { flex-direction: column !important; gap: 16px !important; height: auto !important; align-items: stretch !important; }
+
+  /* sidebar becomes horizontal scroll row */
+  .shots-sidebar { width: 100% !important; flex-direction: row !important; flex-wrap: nowrap !important; overflow-x: auto !important; overflow-y: visible !important; padding-right: 0 !important; padding-bottom: 6px !important; gap: 6px !important; }
   .shots-sidebar::-webkit-scrollbar { height: 2px; width: 0; }
-  .shot-thumb { flex: 0 0 140px; }
-  .shots-preview { height: 460px; }
-  .shot-info-panel { width: 100%; padding-left: 0; border-left: none; border-top: 1px solid rgba(201,168,76,0.1); padding-top: 16px; gap: 12px; }
+  .shot-thumb { flex: 0 0 140px !important; }
+
+  /* preview area: auto height, centered */
+  .shots-preview { height: auto !important; min-height: unset !important; display: flex !important; flex-direction: column !important; align-items: center !important; justify-content: flex-start !important; gap: 16px !important; padding: 8px 0 !important; }
+  .preview-phone-wrap { position: static !important; width: auto !important; }
+  .preview-phone { width: min(200px, 55vw) !important; }
+  .preview-frame { width: 100% !important; }
+
+  /* nav dots: not absolutely positioned */
+  .preview-nav { position: static !important; transform: none !important; display: flex !important; justify-content: center !important; gap: 8px !important; margin-top: 4px; }
+
+  /* info panel: full width below */
+  .shot-info-panel { width: 100% !important; padding-left: 0 !important; border-left: none !important; border-top: 1px solid rgba(201,168,76,0.1) !important; padding-top: 16px !important; gap: 12px !important; }
 
   /* features: 2 col */
-  #tab-features { grid-template-columns: repeat(2, 1fr) !important; }
+  #tab-features { grid-template-columns: repeat(2, 1fr) !important; height: auto !important; overflow: visible !important; }
 
   /* about */
   .about-hero-row { grid-template-columns: 1fr; gap: 20px; }
+  #tab-about { height: auto !important; overflow-y: visible !important; }
   .tech-grid { grid-template-columns: repeat(2, 1fr); }
 }
 
@@ -392,7 +407,12 @@ html, body {
   .page { position: relative; height: auto; min-height: 100dvh; transition: none; }
   .page.hidden { display: none !important; opacity: 1; pointer-events: auto; transform: none; }
   #page-hero.hidden, #page-screens.hidden { transform: none; }
-  #page-screens { overflow: visible; }
+
+  /* KEY FIX: screens page scrollable */
+  #page-screens { overflow-x: hidden; overflow-y: auto !important; }
+  .screens-page { height: auto; overflow: visible; padding: 0 4vw; }
+  .sp-content { height: auto !important; overflow: visible !important; padding: 12px 0 40px; }
+  .tab-panel { height: auto !important; overflow: visible !important; }
 
   /* hero */
   .hero { grid-template-columns: 1fr; padding: 60px 5vw 40px; gap: 36px; height: auto; }
@@ -409,8 +429,7 @@ html, body {
   .data-chip { display: none; }
   .drag-hint { display: none; }
 
-  /* screens page */
-  .screens-page { padding: 0 4vw; }
+  /* screens nav */
   .sp-nav { padding: 14px 0 12px; flex-wrap: wrap; gap: 8px; }
   .sp-nav-left { gap: 10px; }
   .back-btn { font-size: 0.6rem; padding: 6px 12px; }
@@ -420,27 +439,32 @@ html, body {
   .tab-bar { gap: 3px; padding: 10px 0 0; }
   .tab { font-size: 0.57rem; padding: 6px 10px; letter-spacing: 1px; }
 
-  .sp-content { padding: 12px 0 20px; overflow: visible; height: auto; }
-  .tab-panel { height: auto; }
-  .tab-panel.active { display: flex !important; }
+  /* screenshots: full vertical stack */
+  #tab-shots { flex-direction: column !important; gap: 12px !important; height: auto !important; align-items: stretch !important; }
 
-  /* screenshots */
-  #tab-shots { flex-direction: column; gap: 12px; height: auto; }
-  .shots-sidebar { width: 100%; flex-direction: row; flex-wrap: nowrap; overflow-x: auto; overflow-y: visible; padding-right: 0; padding-bottom: 4px; gap: 6px; }
+  .shots-sidebar { width: 100% !important; flex-direction: row !important; flex-wrap: nowrap !important; overflow-x: auto !important; overflow-y: visible !important; padding-right: 0 !important; padding-bottom: 6px !important; gap: 6px !important; }
   .shots-sidebar::-webkit-scrollbar { height: 2px; width: 0; }
-  .shot-thumb { flex: 0 0 120px; }
+  .shot-thumb { flex: 0 0 110px !important; }
   .shot-thumb-tag { display: none; }
-  .shots-preview { height: 400px; }
-  .preview-phone { width: 160px; }
-  .shot-info-panel { width: 100%; padding-left: 0; border-left: none; border-top: 1px solid rgba(201,168,76,0.1); padding-top: 14px; gap: 10px; }
-  .sip-name { font-size: 1.2rem; }
-  .sip-features { gap: 6px; }
-  .sip-feature-text { font-size: 0.73rem; }
-  .preview-nav { position: static; transform: none; justify-content: center; margin-top: 10px; }
+
+  /* preview: phone scales to viewport */
+  .shots-preview { height: auto !important; min-height: unset !important; display: flex !important; flex-direction: column !important; align-items: center !important; justify-content: flex-start !important; gap: 12px !important; padding: 4px 0 !important; }
+  .preview-phone-wrap { position: static !important; width: auto !important; }
+  .preview-phone { width: min(170px, 52vw) !important; animation: none !important; }
+  .preview-frame { width: 100% !important; }
+
+  /* nav dots: static */
+  .preview-nav { position: static !important; transform: none !important; display: flex !important; justify-content: center !important; gap: 8px !important; margin-top: 4px; }
   .pnav-btn { font-size: 0.57rem; padding: 5px 10px; }
 
+  /* info panel */
+  .shot-info-panel { width: 100% !important; padding-left: 0 !important; border-left: none !important; border-top: 1px solid rgba(201,168,76,0.1) !important; padding-top: 14px !important; gap: 10px !important; }
+  .sip-name { font-size: 1.1rem !important; }
+  .sip-features { gap: 6px; }
+  .sip-feature-text { font-size: 0.73rem; }
+
   /* features: 1 col */
-  #tab-features { grid-template-columns: 1fr !important; gap: 8px; }
+  #tab-features { grid-template-columns: 1fr !important; gap: 8px !important; height: auto !important; overflow: visible !important; }
   .feat-card { padding: 14px; }
   .feat-icon svg { width: 18px; height: 18px; }
 
@@ -457,6 +481,7 @@ html, body {
   .tech-card-name { font-size: 0.72rem; }
   .tech-card-role { font-size: 0.62rem; }
   .tech-card-icon svg { width: 16px; height: 16px; }
+  #tab-about { height: auto !important; overflow-y: visible !important; }
   .timeline-item { padding: 10px 12px; gap: 10px; }
   .tl-icon svg { width: 14px; height: 14px; }
   .tl-title { font-size: 0.78rem; }
@@ -750,7 +775,7 @@ html, body {
           <div class="preview-phone-wrap">
             <div class="preview-phone">
               <div class="preview-frame">
-                <div id="preview-screen" style="width:200px;min-height:430px;background:#0A0806;border-radius:35px;overflow:hidden;position:relative;"></div>
+                <div id="preview-screen" style="width:100%;min-height:430px;background:#0A0806;border-radius:35px;overflow:hidden;position:relative;"></div>
               </div>
             </div>
           </div>
@@ -1001,7 +1026,7 @@ function goToHero(){
   document.getElementById('hud-badge').textContent='SYS::TASKVAULT_v1.0.0 ▮';
   if(isMobile()) window.scrollTo(0,0);
 }
-function switchTab(id,btn){document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));document.getElementById('tab-'+id).classList.add('active');btn.classList.add('active');}
+function switchTab(id,btn){document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));document.getElementById('tab-'+id).classList.add('active');btn.classList.add('active');if(isMobile())window.scrollTo(0,0);}
 
 /* ── SVG ICON HELPER (for use inside inline HTML strings) ── */
 function svgUse(id,w=12,h=12,col='#C9A84C'){return `<svg width="${w}" height="${h}" viewBox="0 0 24 24" fill="none" stroke="${col}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:middle;flex-shrink:0;"><use href="#${id}"/></svg>`;}
